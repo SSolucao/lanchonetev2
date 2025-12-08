@@ -1,0 +1,70 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { listCustomers, createCustomer } from "@/src/services/customersService"
+import { getCurrentRestaurant } from "@/src/services/restaurantsService"
+import { calculateDeliveryFee } from "@/src/services/deliveryFeeService"
+import { normalizePhoneToInternational } from "@/lib/format-utils"
+
+export async function GET() {
+  try {
+    const restaurant = await getCurrentRestaurant()
+    if (!restaurant) {
+      return NextResponse.json({ error: "Restaurant not found" }, { status: 404 })
+    }
+
+    const customers = await listCustomers(restaurant.id)
+    return NextResponse.json(customers)
+  } catch (error) {
+    console.error("Error listing customers:", error)
+    return NextResponse.json({ error: "Failed to list customers" }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const restaurant = await getCurrentRestaurant()
+    if (!restaurant) {
+      return NextResponse.json({ error: "Restaurant not found" }, { status: 404 })
+    }
+
+    const body = await request.json()
+
+    let normalizedPhone = body.phone
+    if (body.phone) {
+      const normalized = normalizePhoneToInternational(body.phone)
+      if (normalized) {
+        normalizedPhone = normalized
+      }
+    }
+
+    let deliveryFee = body.delivery_fee_default || 0
+
+    if (body.cep && !body.delivery_fee_default && restaurant.address) {
+      try {
+        const customerAddress = [body.street, body.number, body.neighborhood, body.city].filter(Boolean).join(", ")
+
+        if (customerAddress) {
+          const feeResult = await calculateDeliveryFee(restaurant.id, restaurant.address, customerAddress)
+
+          if (feeResult.success) {
+            deliveryFee = feeResult.fee
+          }
+        }
+      } catch (feeError) {
+        console.error("Error calculating delivery fee:", feeError)
+      }
+    }
+
+    const customer = await createCustomer({
+      ...body,
+      phone: normalizedPhone,
+      restaurant_id: restaurant.id,
+      delivery_fee_default: deliveryFee,
+    })
+
+    return NextResponse.json(customer)
+  } catch (error) {
+    console.error("Error creating customer:", error)
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    return NextResponse.json({ error: "Failed to create customer", details: errorMessage }, { status: 500 })
+  }
+}
