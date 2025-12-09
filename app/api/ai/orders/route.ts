@@ -114,24 +114,29 @@ export async function POST(request: Request) {
       )
     }
 
+    // Payment method is required
+    if (!payment_method_name || String(payment_method_name).trim() === "") {
+      return NextResponse.json({ error: "payment_method_name is required" }, { status: 400 })
+    }
+
     // Get payment method if name provided
     let payment_method_id = null
     let payment_method_display = null
 
-    if (payment_method_name) {
-      const { data: paymentMethod } = await supabase
-        .from("payment_methods")
-        .select("id, name")
-        .eq("restaurant_id", restaurant.id)
-        .ilike("name", payment_method_name)
-        .limit(1)
-        .single()
+    const { data: paymentMethod } = await supabase
+      .from("payment_methods")
+      .select("id, name")
+      .eq("restaurant_id", restaurant.id)
+      .ilike("name", payment_method_name)
+      .limit(1)
+      .single()
 
-      if (paymentMethod) {
-        payment_method_id = paymentMethod.id
-        payment_method_display = paymentMethod.name
-      }
+    if (!paymentMethod) {
+      return NextResponse.json({ error: `Payment method not found: ${payment_method_name}` }, { status: 400 })
     }
+
+    payment_method_id = paymentMethod.id
+    payment_method_display = paymentMethod.name
 
     // Get next order number
     const orderNumber = await getNextOrderNumber(restaurant.id)
