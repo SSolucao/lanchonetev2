@@ -345,7 +345,7 @@ export interface OrderForPrint extends OrderWithDetails {
 export async function getOrderForPrint(orderId: string): Promise<OrderForPrint | null> {
   const supabase = await createClient()
 
-  // Fetch order with related data
+  // Fetch order with related data (manual fetch for comanda to avoid FK requirement)
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
     .select(
@@ -353,8 +353,7 @@ export async function getOrderForPrint(orderId: string): Promise<OrderForPrint |
       *,
       customer:customers(id, name, phone, street, number, neighborhood, city, cep),
       payment_method:payment_methods(id, name),
-      restaurant:restaurants(id, name, address, cep_origem),
-      comanda:comandas(id, numero, mesa)
+      restaurant:restaurants(id, name, address, cep_origem)
     `,
     )
     .eq("id", orderId)
@@ -383,6 +382,18 @@ export async function getOrderForPrint(orderId: string): Promise<OrderForPrint |
 
   if (itemsError) throw itemsError
 
+  let comanda = null
+  if ((orderData as any)?.comanda_id) {
+    const { data: comandaData, error: comandaError } = await supabase
+      .from("comandas")
+      .select("id, numero, mesa")
+      .eq("id", (orderData as any).comanda_id)
+      .single()
+
+    if (comandaError && comandaError.code !== "PGRST116") throw comandaError
+    if (comandaData) comanda = comandaData
+  }
+
   const items =
     itemsData?.map((item: any) => ({
       id: item.id,
@@ -397,6 +408,7 @@ export async function getOrderForPrint(orderId: string): Promise<OrderForPrint |
 
   return {
     ...orderData,
+    comanda,
     items,
   } as OrderForPrint
 }

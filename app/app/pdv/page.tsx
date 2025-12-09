@@ -466,6 +466,15 @@ export default function PdvPage() {
                     className="w-full bg-transparent"
                     size="lg"
                     variant="outline"
+                    onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/duas-vias`, "_blank")}
+                  >
+                    Imprimir 2 vias (cozinha + balcão)
+                  </Button>
+
+                  <Button
+                    className="w-full bg-transparent"
+                    size="lg"
+                    variant="outline"
                     onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/cozinha`, "_blank")}
                   >
                     Imprimir cozinha

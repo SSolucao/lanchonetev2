@@ -191,7 +191,7 @@ export default function ClientesPage() {
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja excluir o cliente <strong>{customerToDelete?.name}</strong>? Esta ação não pode ser
-              desfeita.
+              desfeita e todos os pedidos ligados a esse cliente serão apagados também.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

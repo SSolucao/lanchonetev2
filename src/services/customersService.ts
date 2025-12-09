@@ -55,9 +55,28 @@ export async function updateCustomer(
 
 export async function deleteCustomer(id: string): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase.from("customers").update({ active: false }).eq("id", id)
 
-  if (error) throw error
+  // Collect orders linked to this customer
+  const { data: orders, error: ordersError } = await supabase.from("orders").select("id").eq("customer_id", id)
+  if (ordersError) throw ordersError
+
+  const orderIds = (orders || []).map((o) => o.id)
+
+  // Delete order items first to avoid FK issues if cascades are not set
+  if (orderIds.length > 0) {
+    const { error: itemsError } = await supabase.from("order_items").delete().in("order_id", orderIds)
+    if (itemsError) throw itemsError
+  }
+
+  // Delete orders
+  if (orderIds.length > 0) {
+    const { error: deleteOrdersError } = await supabase.from("orders").delete().in("id", orderIds)
+    if (deleteOrdersError) throw deleteOrdersError
+  }
+
+  // Finally delete customer
+  const { error: customerError } = await supabase.from("customers").delete().eq("id", id)
+  if (customerError) throw customerError
 }
 
 export async function searchCustomers(restaurantId: string, query: string): Promise<Customer[]> {
