@@ -157,13 +157,13 @@ export async function POST(request: Request) {
           cliente: customerAddress,
         })
 
-        const feeResult = await calculateDeliveryFee(restaurant.id, restaurantAddress, customerAddress)
+        const feeResult = await calculateDeliveryFee(restaurant.id, restaurantAddress, customerAddress, neighborhood)
 
-        if (feeResult.success && feeResult.fee > 0) {
-          delivery_fee_default = feeResult.fee
+        if (feeResult.success) {
+          delivery_fee_default = feeResult.fee || 0
           console.log("[v0] Taxa calculada:", {
             distancia: feeResult.distance_km + " km",
-            taxa: "R$ " + feeResult.fee,
+            taxa: "R$ " + delivery_fee_default,
             regra: feeResult.rule_applied,
           })
         } else {

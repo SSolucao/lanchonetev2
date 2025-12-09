@@ -245,14 +245,69 @@ export default function ConfiguracoesPage() {
         <TabsContent value="delivery">
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Regras de taxa de entrega</h2>
+              <div>
+                <h2 className="text-xl font-semibold">Regras de taxa de entrega</h2>
+                <p className="text-sm text-muted-foreground">
+                  Regras por bairro têm prioridade; se não houver, aplica a regra por distância.
+                </p>
+              </div>
               <Button onClick={handleCreateDeliveryRule}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nova regra
               </Button>
             </div>
 
+            {/* Regras por bairro */}
             <div className="border rounded-lg">
+              <div className="p-3 border-b bg-muted/40">
+                <h3 className="font-semibold">Regras por bairro</h3>
+                <p className="text-xs text-muted-foreground">
+                  Se houver correspondência de bairro, ela será usada antes da distância.
+                </p>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium">Bairro</th>
+                    <th className="text-right p-3 font-medium">Taxa (R$)</th>
+                    <th className="text-center p-3 font-medium">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveryRules.filter((rule) => rule.neighborhood).length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="text-center py-8 text-muted-foreground">
+                        Nenhuma regra por bairro cadastrada
+                      </td>
+                    </tr>
+                  ) : (
+                    deliveryRules
+                      .filter((rule) => rule.neighborhood)
+                      .map((rule) => (
+                        <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="p-3">{rule.neighborhood}</td>
+                          <td className="p-3 text-right">R$ {rule.fee.toFixed(2)}</td>
+                          <td className="p-3 text-center">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Regras por distância */}
+            <div className="border rounded-lg">
+              <div className="p-3 border-b bg-muted/40">
+                <h3 className="font-semibold">Regras por distância</h3>
+                <p className="text-xs text-muted-foreground">Usadas apenas se nenhuma regra de bairro corresponder.</p>
+              </div>
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-muted/50">
@@ -263,28 +318,30 @@ export default function ConfiguracoesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {deliveryRules.length === 0 ? (
+                  {deliveryRules.filter((rule) => !rule.neighborhood).length === 0 ? (
                     <tr>
                       <td colSpan={4} className="text-center py-8 text-muted-foreground">
-                        Nenhuma regra cadastrada
+                        Nenhuma regra por distância cadastrada
                       </td>
                     </tr>
                   ) : (
-                    deliveryRules.map((rule) => (
-                      <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
-                        <td className="p-3">{rule.from_km}</td>
-                        <td className="p-3">{rule.to_km}</td>
-                        <td className="p-3 text-right">R$ {rule.fee.toFixed(2)}</td>
-                        <td className="p-3 text-center">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
+                    deliveryRules
+                      .filter((rule) => !rule.neighborhood)
+                      .map((rule) => (
+                        <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="p-3">{rule.from_km}</td>
+                          <td className="p-3">{rule.to_km}</td>
+                          <td className="p-3 text-right">R$ {rule.fee.toFixed(2)}</td>
+                          <td className="p-3 text-center">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
                   )}
                 </tbody>
               </table>

@@ -43,10 +43,15 @@ export async function POST(request: NextRequest) {
         const customerAddress = [body.street, body.number, body.neighborhood, body.city].filter(Boolean).join(", ")
 
         if (customerAddress) {
-          const feeResult = await calculateDeliveryFee(restaurant.id, restaurant.address, customerAddress)
+          const feeResult = await calculateDeliveryFee(
+            restaurant.id,
+            restaurant.address,
+            customerAddress,
+            body.neighborhood || null,
+          )
 
           if (feeResult.success) {
-            deliveryFee = feeResult.fee
+            deliveryFee = feeResult.fee || 0
           }
         }
       } catch (feeError) {

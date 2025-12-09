@@ -60,12 +60,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           console.log("[v0] Restaurant address:", restaurant.address)
           console.log("[v0] Customer address:", customerAddress)
 
-          const feeResult = await calculateDeliveryFee(restaurant.id, restaurant.address, customerAddress)
+          const feeResult = await calculateDeliveryFee(
+            restaurant.id,
+            restaurant.address,
+            customerAddress,
+            body.neighborhood || existingCustomer.neighborhood || null,
+          )
 
           console.log("[v0] Fee result:", feeResult)
 
           if (feeResult.success) {
-            body.delivery_fee_default = feeResult.fee
+            body.delivery_fee_default = feeResult.fee || 0
           }
         }
       } catch (feeError) {

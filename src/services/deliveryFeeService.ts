@@ -158,13 +158,15 @@ export async function calculateDeliveryFee(
     customerNeighborhood,
   })
 
-  if (customerNeighborhood) {
+  const normalizedNeighborhood = customerNeighborhood?.trim()
+
+  if (normalizedNeighborhood) {
     try {
-      const neighborhoodFee = await findDeliveryFeeForNeighborhood(restaurantId, customerNeighborhood)
+      const neighborhoodFee = await findDeliveryFeeForNeighborhood(restaurantId, normalizedNeighborhood)
 
       if (neighborhoodFee !== null) {
         console.log("[v0] Using neighborhood-based fee:", {
-          neighborhood: customerNeighborhood,
+          neighborhood: normalizedNeighborhood,
           fee: neighborhoodFee,
         })
 
@@ -172,7 +174,7 @@ export async function calculateDeliveryFee(
           success: true,
           distance_km: 0, // Not calculated for neighborhood
           fee: neighborhoodFee,
-          rule_applied: `Bairro: ${customerNeighborhood}`,
+          rule_applied: `Bairro: ${normalizedNeighborhood}`,
         }
       }
     } catch (error) {
