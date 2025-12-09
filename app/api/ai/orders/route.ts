@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createOrderWithItems, getNextOrderNumber } from "@/src/services/ordersService"
+import { logApiCall } from "@/src/services/apiLogService"
 
 function parseItensPedido(itensPedido: string): Array<{
   product_id: string
@@ -35,6 +36,8 @@ function parseItensPedido(itensPedido: string): Array<{
 
 // POST /api/ai/orders - Create order from AI agent
 export async function POST(request: Request) {
+  const startedAt = Date.now()
+  let statusCode = 200
   try {
     const body = await request.json()
     console.log("[v0] AI Order Request Body:", JSON.stringify(body, null, 2))
@@ -60,7 +63,16 @@ export async function POST(request: Request) {
       .single()
 
     if (restaurantError || !restaurant) {
-      return NextResponse.json({ error: "Failed to fetch restaurant" }, { status: 500 })
+      statusCode = 500
+      await logApiCall({
+        route: "/api/ai/orders",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        error: "Failed to fetch restaurant",
+      })
+      return NextResponse.json({ error: "Failed to fetch restaurant" }, { status: statusCode })
     }
 
     let customer = null
@@ -82,11 +94,21 @@ export async function POST(request: Request) {
     }
 
     if (!customer) {
+      statusCode = 400
+      await logApiCall({
+        route: "/api/ai/orders",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        error: "Customer not found",
+        restaurant_id: restaurant.id,
+      })
       return NextResponse.json(
         {
           error: "Customer not found. Please create customer first using /api/ai/customers",
         },
-        { status: 400 },
+        { status: statusCode },
       )
     }
 
@@ -106,17 +128,39 @@ export async function POST(request: Request) {
     }
 
     if (parsedItems.length === 0) {
+      statusCode = 400
+      await logApiCall({
+        route: "/api/ai/orders",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        error: "No items provided",
+        restaurant_id: restaurant.id,
+        customer_id: customer.id,
+      })
       return NextResponse.json(
         {
           error: "No items provided. Use itens_pedido='id:qtd:obs;id:qtd' or items array",
         },
-        { status: 400 },
+        { status: statusCode },
       )
     }
 
     // Payment method is required
     if (!payment_method_name || String(payment_method_name).trim() === "") {
-      return NextResponse.json({ error: "payment_method_name is required" }, { status: 400 })
+      statusCode = 400
+      await logApiCall({
+        route: "/api/ai/orders",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        error: "payment_method_name is required",
+        restaurant_id: restaurant.id,
+        customer_id: customer.id,
+      })
+      return NextResponse.json({ error: "payment_method_name is required" }, { status: statusCode })
     }
 
     // Get payment method if name provided
@@ -132,7 +176,18 @@ export async function POST(request: Request) {
       .single()
 
     if (!paymentMethod) {
-      return NextResponse.json({ error: `Payment method not found: ${payment_method_name}` }, { status: 400 })
+      statusCode = 400
+      await logApiCall({
+        route: "/api/ai/orders",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        error: `Payment method not found: ${payment_method_name}`,
+        restaurant_id: restaurant.id,
+        customer_id: customer.id,
+      })
+      return NextResponse.json({ error: `Payment method not found: ${payment_method_name}` }, { status: statusCode })
     }
 
     payment_method_id = paymentMethod.id
@@ -256,7 +311,7 @@ export async function POST(request: Request) {
 
     console.log("[v0] Pedido criado com sucesso:", order.id)
 
-    return NextResponse.json({
+    const response = {
       success: true,
       order: {
         id: order.id,
@@ -274,15 +329,46 @@ export async function POST(request: Request) {
         name: customer.name,
       },
       message,
+    }
+
+    await logApiCall({
+      route: "/api/ai/orders",
+      method: "POST",
+      status_code: statusCode,
+      duration_ms: Date.now() - startedAt,
+      request_body: body,
+      response_body: response,
+      restaurant_id: restaurant.id,
+      customer_id: customer.id,
+      order_id: order.id,
+      metadata: {
+        payment_method_id,
+        payment_method_name: payment_method_display,
+        tipo_pedido: finalTipoPedido,
+        delivery_fee: deliveryFee,
+        subtotal,
+        total,
+        items_count: orderItems.length,
+      },
     })
+
+    return NextResponse.json(response)
   } catch (error) {
+    statusCode = 500
     console.error("[v0] Error creating AI order:", error)
+    await logApiCall({
+      route: "/api/ai/orders",
+      method: "POST",
+      status_code: statusCode,
+      duration_ms: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return NextResponse.json(
       {
         error: "Failed to create order",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status: statusCode },
     )
   }
 }

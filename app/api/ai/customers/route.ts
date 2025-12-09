@@ -2,15 +2,27 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { fetchAddressFromCEP } from "@/lib/format-utils"
 import { calculateDeliveryFee, buildFullAddress } from "@/src/services/deliveryFeeService"
+import { logApiCall } from "@/src/services/apiLogService"
 
 // GET /api/ai/customers?phone=5511933851277
 export async function GET(request: Request) {
+  const startedAt = Date.now()
+  let statusCode = 200
   try {
     const { searchParams } = new URL(request.url)
     const phone = searchParams.get("phone")
 
     if (!phone) {
-      return NextResponse.json({ error: "Phone number is required" }, { status: 400 })
+      statusCode = 400
+      await logApiCall({
+        route: "/api/ai/customers",
+        method: "GET",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: { query: Object.fromEntries(searchParams) },
+        error: "Phone number is required",
+      })
+      return NextResponse.json({ error: "Phone number is required" }, { status: statusCode })
     }
 
     const supabase = await createClient()
@@ -18,7 +30,16 @@ export async function GET(request: Request) {
     // Get restaurant
     const { data: restaurant } = await supabase.from("restaurants").select("*").limit(1).single()
     if (!restaurant) {
-      return NextResponse.json({ error: "No restaurant found" }, { status: 404 })
+      statusCode = 404
+      await logApiCall({
+        route: "/api/ai/customers",
+        method: "GET",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: { query: Object.fromEntries(searchParams) },
+        error: "No restaurant found",
+      })
+      return NextResponse.json({ error: "No restaurant found" }, { status: statusCode })
     }
 
     // Find customer by phone
@@ -31,6 +52,15 @@ export async function GET(request: Request) {
       .single()
 
     if (!customer) {
+      await logApiCall({
+        route: "/api/ai/customers",
+        method: "GET",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: { query: Object.fromEntries(searchParams) },
+        response_body: { exists: false, customer: null },
+        restaurant_id: restaurant.id,
+      })
       return NextResponse.json({ exists: false, customer: null })
     }
 
@@ -79,7 +109,7 @@ export async function GET(request: Request) {
         }
       : null
 
-    return NextResponse.json({
+    const response = {
       exists: true,
       customer: {
         id: customer.id,
@@ -95,15 +125,39 @@ export async function GET(request: Request) {
         delivery_fee: customer.delivery_fee_default || 0,
       },
       last_order: lastOrderFormatted,
+    }
+
+    await logApiCall({
+      route: "/api/ai/customers",
+      method: "GET",
+      status_code: statusCode,
+      duration_ms: Date.now() - startedAt,
+      request_body: { query: Object.fromEntries(searchParams) },
+      response_body: response,
+      restaurant_id: restaurant.id,
+      customer_id: customer.id,
+      metadata: { has_last_order: !!lastOrder },
     })
+
+    return NextResponse.json(response)
   } catch (error) {
+    statusCode = 500
     console.error("[v0] Error in GET /api/ai/customers:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    await logApiCall({
+      route: "/api/ai/customers",
+      method: "GET",
+      status_code: statusCode,
+      duration_ms: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return NextResponse.json({ error: "Internal server error" }, { status: statusCode })
   }
 }
 
 // POST /api/ai/customers
 export async function POST(request: Request) {
+  const startedAt = Date.now()
+  let statusCode = 200
   try {
     const body = await request.json()
     console.log("[v0] AI Customers API - Body recebido:", JSON.stringify(body, null, 2))
@@ -111,7 +165,16 @@ export async function POST(request: Request) {
     let { name, phone, cep, street, number, neighborhood, city, complement, notes } = body
 
     if (!name || !phone) {
-      return NextResponse.json({ error: "Name and phone are required" }, { status: 400 })
+      statusCode = 400
+      await logApiCall({
+        route: "/api/ai/customers",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        error: "Name and phone are required",
+      })
+      return NextResponse.json({ error: "Name and phone are required" }, { status: statusCode })
     }
 
     const supabase = await createClient()
@@ -119,7 +182,16 @@ export async function POST(request: Request) {
     // Get restaurant with full address
     const { data: restaurant } = await supabase.from("restaurants").select("*").limit(1).single()
     if (!restaurant) {
-      return NextResponse.json({ error: "No restaurant found" }, { status: 404 })
+      statusCode = 404
+      await logApiCall({
+        route: "/api/ai/customers",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        error: "No restaurant found",
+      })
+      return NextResponse.json({ error: "No restaurant found" }, { status: statusCode })
     }
 
     if (cep && (!street || !neighborhood || !city)) {
@@ -221,7 +293,7 @@ export async function POST(request: Request) {
 
     console.log("[v0] Cliente criado com sucesso:", customer.id)
 
-    return NextResponse.json({
+    const response = {
       success: true,
       customer: {
         id: customer.id,
@@ -234,9 +306,35 @@ export async function POST(request: Request) {
         delivery_fee_default > 0
           ? `Cliente cadastrado! Taxa de entrega: R$ ${delivery_fee_default.toFixed(2)}`
           : "Cliente cadastrado! Taxa de entrega não calculada (endereço incompleto)",
+    }
+
+    await logApiCall({
+      route: "/api/ai/customers",
+      method: "POST",
+      status_code: statusCode,
+      duration_ms: Date.now() - startedAt,
+      request_body: body,
+      response_body: response,
+      restaurant_id: restaurant.id,
+      customer_id: customer.id,
+      metadata: {
+        delivery_fee_default,
+        cep: cep || null,
+        neighborhood: neighborhood || null,
+      },
     })
+
+    return NextResponse.json(response)
   } catch (error) {
+    statusCode = 500
     console.error("[v0] Error in POST /api/ai/customers:", error)
-    return NextResponse.json({ error: "Failed to create customer" }, { status: 500 })
+    await logApiCall({
+      route: "/api/ai/customers",
+      method: "POST",
+      status_code: statusCode,
+      duration_ms: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return NextResponse.json({ error: "Failed to create customer" }, { status: statusCode })
   }
 }
