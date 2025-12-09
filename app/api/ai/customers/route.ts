@@ -306,6 +306,7 @@ export async function POST(request: Request) {
         delivery_fee_default > 0
           ? `Cliente cadastrado! Taxa de entrega: R$ ${delivery_fee_default.toFixed(2)}`
           : "Cliente cadastrado! Taxa de entrega não calculada (endereço incompleto)",
+      rule_applied: delivery_fee_default > 0 ? "bairro ou km aplicado" : "nenhuma regra aplicada",
     }
 
     await logApiCall({

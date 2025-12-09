@@ -1,4 +1,5 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { createClient as createAnonClient } from "@/lib/supabase/server"
 
 type ApiLogInput = {
   route: string
@@ -24,15 +25,16 @@ export async function logApiCall(input: ApiLogInput) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    let supabase = null
 
-    if (!supabaseUrl || !serviceKey) {
-      console.warn("[api_log] Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL")
-      return
+    if (supabaseUrl && serviceKey) {
+      supabase = createSupabaseClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    } else {
+      console.warn("[api_log] Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL, falling back to anon client")
+      supabase = await createAnonClient()
     }
-
-    const supabase = createSupabaseClient(supabaseUrl, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
 
     const payload = {
       ...input,
