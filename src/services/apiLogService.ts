@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
 type ApiLogInput = {
   route: string
@@ -22,7 +22,18 @@ type ApiLogInput = {
 // Best-effort logger to api_logs. Swallows its own errors to avoid breaking flows.
 export async function logApiCall(input: ApiLogInput) {
   try {
-    const supabase = await createClient()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !serviceKey) {
+      console.warn("[api_log] Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL")
+      return
+    }
+
+    const supabase = createSupabaseClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
     const payload = {
       ...input,
       request_body: input.request_body ?? null,
