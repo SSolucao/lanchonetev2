@@ -62,11 +62,15 @@ export async function findDeliveryFeeForNeighborhood(
   neighborhood: string,
 ): Promise<number | null> {
   const supabase = await createClient()
+
+  const normalized = neighborhood.trim()
+  const pattern = `%${normalized}%`
+
   const { data, error } = await supabase
     .from("delivery_rules")
     .select("*")
     .eq("restaurant_id", restaurantId)
-    .ilike("neighborhood", neighborhood) // Case-insensitive match
+    .ilike("neighborhood", pattern) // Case-insensitive, substring match
     .single()
 
   if (error) {
