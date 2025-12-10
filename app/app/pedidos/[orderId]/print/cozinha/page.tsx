@@ -101,63 +101,63 @@ export default function KitchenPrintPage({ params }: PageProps) {
         </Button>
       </div>
 
-      {/* Kitchen ticket content */}
-      <div className="min-h-screen bg-white p-8 print:p-4">
-        <div className="max-w-2xl mx-auto font-sans text-black">
+      {/* Thermal label 100x150 content */}
+      <div className="min-h-screen bg-white flex justify-center py-6 print:py-0">
+        <div className="ticket w-[100mm] max-w-[100mm] font-sans text-black text-sm leading-snug">
           {/* Header */}
-          <div className="text-center mb-6 border-b-2 border-black pb-4">
-            <h1 className="text-2xl font-bold mb-1">{order.restaurant?.name}</h1>
-            <p className="text-lg font-semibold">COMANDA DE COZINHA</p>
+          <div className="text-center mb-4 pb-3 border-b border-black">
+            <h1 className="text-xl font-bold uppercase">{order.restaurant?.name}</h1>
+            <p className="text-xs font-semibold tracking-wide">Comanda de Cozinha</p>
           </div>
 
-          {/* Order info */}
-          <div className="mb-6 space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-4xl font-bold min-w-[60px]">{order.order_number}</span>
-              <span className="text-xl font-semibold">{tipoPedidoLabel()}</span>
+          {/* Order summary */}
+          <div className="mb-4 flex justify-between items-start">
+            <div>
+              <p className="text-[32px] font-extrabold leading-none">#{order.order_number}</p>
+              <p className="text-xs mt-2">
+                {new Date(order.created_at).toLocaleDateString("pt-BR")}{" "}
+                {new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </p>
             </div>
-            <p className="text-base">
-              {new Date(order.created_at).toLocaleDateString("pt-BR")} às{" "}
-              {new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            </p>
+            <div className="text-right">
+              <p className="text-[11px] uppercase text-gray-700">Tipo</p>
+              <p className="text-sm font-semibold">{tipoPedidoLabel()}</p>
+            </div>
           </div>
 
-          {/* Customer info for delivery */}
+          {/* Customer info */}
           {(order.tipo_pedido === "ENTREGA" || order.tipo_pedido === "RETIRADA" || order.channel === "DELIVERY") &&
             order.customer && (
-              <div className="mb-6 border-t-2 border-dashed border-gray-400 pt-4">
-                <p className="font-bold text-lg mb-1">Cliente: {order.customer.name}</p>
-                {(order.tipo_pedido === "ENTREGA" || order.delivery_mode === "ENTREGA") && (
-                  <>
-                    {order.customer.neighborhood && (
-                      <p className="text-base">
-                        <strong>Bairro:</strong> {order.customer.neighborhood}
-                      </p>
-                    )}
-                    {order.customer.street && (
-                      <p className="text-base">
-                        {order.customer.street}
-                        {order.customer.number && `, ${order.customer.number}`}
-                      </p>
-                    )}
-                  </>
+              <div className="mb-4 pt-2 border-t border-dashed border-gray-400">
+                <p className="font-semibold text-sm">Cliente</p>
+                <p className="text-sm">{order.customer.name}</p>
+                {order.customer.neighborhood && (
+                  <p className="text-sm">
+                    Bairro: <strong>{order.customer.neighborhood}</strong>
+                  </p>
+                )}
+                {order.customer.street && (
+                  <p className="text-sm">
+                    {order.customer.street}
+                    {order.customer.number && `, ${order.customer.number}`}
+                  </p>
                 )}
               </div>
             )}
 
           {/* Items */}
-          <div className="mb-6 border-t-2 border-black pt-4">
-            <h3 className="text-xl font-bold mb-4">ITENS DO PEDIDO</h3>
-            <div className="space-y-4">
+          <div className="pt-2 border-t border-black">
+            <p className="text-sm font-semibold mb-2 uppercase tracking-wide">Itens do pedido</p>
+            <div className="space-y-3">
               {order.items?.map((item) => (
-                <div key={item.id} className="border-b border-gray-300 pb-3">
-                  <div className="flex items-start gap-3">
-                    <span className="text-3xl font-bold min-w-[60px]">{item.quantity}x</span>
+                <div key={item.id} className="pb-2 border-b border-gray-300 last:border-0">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xl font-extrabold min-w-[36px]">{item.quantity}x</span>
                     <div className="flex-1">
-                      <p className="text-xl font-semibold leading-tight">{item.product_name}</p>
-                      {(item as any).product_type === "COMBO" && <p className="text-sm text-gray-600 mt-1">(Combo)</p>}
+                      <p className="text-sm font-semibold leading-tight">{item.product_name}</p>
+                      {(item as any).product_type === "COMBO" && <p className="text-[11px] text-gray-600">Combo</p>}
                       {item.notes && (
-                        <p className="text-base mt-2 bg-yellow-100 p-2 rounded">
+                        <p className="text-[12px] mt-1 bg-yellow-100 px-2 py-1 rounded">
                           <strong>Obs:</strong> {item.notes}
                         </p>
                       )}
@@ -170,14 +170,14 @@ export default function KitchenPrintPage({ params }: PageProps) {
 
           {/* Order notes */}
           {order.notes && (
-            <div className="mb-6 border-t-2 border-dashed border-gray-400 pt-4">
-              <p className="font-bold text-lg mb-2">Observações do pedido:</p>
-              <p className="text-base bg-yellow-100 p-3 rounded">{order.notes}</p>
+            <div className="mt-4 pt-2 border-t border-dashed border-gray-400">
+              <p className="text-sm font-semibold mb-1">Observações do pedido</p>
+              <p className="text-[12px] bg-yellow-100 px-2 py-1 rounded">{order.notes}</p>
             </div>
           )}
 
           {/* Footer */}
-          <div className="text-center text-sm text-gray-600 mt-8 pt-4 border-t border-gray-300">
+          <div className="text-center text-[11px] text-gray-600 mt-4 pt-2 border-t border-gray-300">
             <p>Impresso em {new Date().toLocaleString("pt-BR")}</p>
           </div>
         </div>
@@ -188,9 +188,15 @@ export default function KitchenPrintPage({ params }: PageProps) {
           body {
             margin: 0;
             padding: 0;
+            background: white;
           }
           @page {
-            margin: 0.5cm;
+            margin: 3mm;
+            size: 100mm 150mm;
+          }
+          .ticket {
+            width: 100mm !important;
+            max-width: 100mm !important;
           }
         }
       `}</style>

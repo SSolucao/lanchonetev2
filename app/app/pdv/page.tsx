@@ -475,6 +475,30 @@ export default function PdvPage() {
                     className="w-full bg-transparent"
                     size="lg"
                     variant="outline"
+                    onClick={async () => {
+                      if (!createdOrderId) return
+                      try {
+                        const res = await fetch(`/api/orders/${createdOrderId}/print-pdf`)
+                        if (!res.ok) throw new Error("Falha ao gerar PDF")
+                        const blob = await res.blob()
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement("a")
+                        a.href = url
+                        a.download = `pedido-${createdOrderId}.pdf`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      } catch (err) {
+                        console.error("Erro ao baixar PDF:", err)
+                      }
+                    }}
+                  >
+                    Baixar PDF (2 vias)
+                  </Button>
+
+                  <Button
+                    className="w-full bg-transparent"
+                    size="lg"
+                    variant="outline"
                     onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/cozinha`, "_blank")}
                   >
                     Imprimir cozinha

@@ -99,23 +99,21 @@ export default function CustomerPrintPage({ params }: PageProps) {
         </Button>
       </div>
 
-      {/* Customer receipt content */}
-      <div className="min-h-screen bg-white p-8 print:p-4">
-        <div className="max-w-md mx-auto font-sans text-black">
-          {/* Header */}
-          <div className="text-center mb-6 border-b-2 border-black pb-4">
-            <h1 className="text-xl font-bold mb-1">{order.restaurant?.name}</h1>
-            {order.restaurant?.address && <p className="text-sm">{order.restaurant.address}</p>}
-            <p className="text-lg font-semibold mt-2">CUPOM DO CLIENTE</p>
+      {/* Thermal label 100x150 content */}
+      <div className="min-h-screen bg-white flex justify-center py-6 print:py-0">
+        <div className="ticket w-[100mm] max-w-[100mm] font-sans text-black text-sm leading-snug">
+          <div className="text-center mb-4 pb-3 border-b border-black">
+            <h1 className="text-xl font-bold uppercase">{order.restaurant?.name}</h1>
+            {order.restaurant?.address && <p className="text-[11px]">{order.restaurant.address}</p>}
+            <p className="text-xs font-semibold mt-1 tracking-wide">Cupom do Cliente</p>
           </div>
 
-          {/* Order info */}
-          <div className="mb-4 text-sm space-y-1">
+          <div className="mb-3 text-xs space-y-1">
             <p>
               <strong>Pedido:</strong> #{order.order_number}
             </p>
             <p>
-              <strong>Data:</strong> {new Date(order.created_at).toLocaleDateString("pt-BR")} às{" "}
+              <strong>Data:</strong> {new Date(order.created_at).toLocaleDateString("pt-BR")}{" "}
               {new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </p>
             <p>
@@ -123,64 +121,57 @@ export default function CustomerPrintPage({ params }: PageProps) {
             </p>
           </div>
 
-          {/* Customer info for delivery */}
           {(order.tipo_pedido === "ENTREGA" || (order.channel === "DELIVERY" && order.delivery_mode === "ENTREGA")) &&
             order.customer && (
-              <div className="mb-4 border-t border-dashed border-gray-400 pt-3 text-sm">
-                <p className="font-bold mb-1">Cliente</p>
+              <div className="mb-3 border-t border-dashed border-gray-400 pt-2 text-xs">
+                <p className="font-semibold">Cliente</p>
                 <p>{order.customer.name}</p>
                 {order.customer.phone && <p>Tel: {order.customer.phone}</p>}
-                {order.delivery_mode === "ENTREGA" && (
-                  <div className="mt-2">
-                    {order.customer.street && (
-                      <p>
-                        {order.customer.street}
-                        {order.customer.number && `, ${order.customer.number}`}
-                      </p>
-                    )}
-                    {order.customer.neighborhood && <p>{order.customer.neighborhood}</p>}
-                    {order.customer.city && <p>{order.customer.city}</p>}
-                    {order.customer.cep && <p>CEP: {order.customer.cep}</p>}
-                  </div>
-                )}
+                <div className="mt-1">
+                  {order.customer.street && (
+                    <p>
+                      {order.customer.street}
+                      {order.customer.number && `, ${order.customer.number}`}
+                    </p>
+                  )}
+                  {order.customer.neighborhood && <p>{order.customer.neighborhood}</p>}
+                  {order.customer.city && <p>{order.customer.city}</p>}
+                  {order.customer.cep && <p>CEP: {order.customer.cep}</p>}
+                </div>
               </div>
             )}
 
-          {/* Items */}
-          <div className="mb-4 border-t border-black pt-3">
-            <div className="space-y-2">
-              {order.items?.map((item) => (
-                <div key={item.id} className="text-sm">
-                  <div className="flex justify-between">
-                    <span>
-                      {item.quantity}x {item.product_name}
-                    </span>
-                    <span>
-                      R${" "}
-                      {item.total_price.toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-600 pl-4">
-                    <span>Unitário</span>
-                    <span>
-                      R${" "}
-                      {item.unit_price.toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                  {item.notes && <p className="text-xs text-gray-600 pl-4 mt-1">Obs: {item.notes}</p>}
+          <div className="border-t border-black pt-2 space-y-2">
+            {order.items?.map((item) => (
+              <div key={item.id} className="text-sm pb-1 border-b border-gray-300 last:border-0">
+                <div className="flex justify-between">
+                  <span>
+                    {item.quantity}x {item.product_name}
+                  </span>
+                  <span>
+                    R${" "}
+                    {item.total_price.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-between text-[11px] text-gray-600 pl-4">
+                  <span>Unitário</span>
+                  <span>
+                    R${" "}
+                    {item.unit_price.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                {item.notes && <p className="text-[11px] text-gray-700 pl-4 mt-1">Obs: {item.notes}</p>}
+              </div>
+            ))}
           </div>
 
-          {/* Totals */}
-          <div className="mb-4 border-t-2 border-black pt-3 space-y-1 text-sm">
+          <div className="mt-3 border-t-2 border-black pt-2 space-y-1 text-sm">
             <div className="flex justify-between">
               <span>Subtotal:</span>
               <span>
@@ -203,8 +194,8 @@ export default function CustomerPrintPage({ params }: PageProps) {
                 </span>
               </div>
             )}
-            <div className="flex justify-between font-bold text-lg border-t border-black pt-2 mt-2">
-              <span>TOTAL:</span>
+            <div className="flex justify-between font-bold text-lg border-t border-black pt-2 mt-1">
+              <span>Total:</span>
               <span>
                 R${" "}
                 {order.total.toLocaleString("pt-BR", {
@@ -215,25 +206,21 @@ export default function CustomerPrintPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Payment method */}
-          <div className="mb-4 text-sm">
+          <div className="mt-2 text-sm">
             <p>
               <strong>Pagamento:</strong> {order.payment_method?.name || "Não informado"}
             </p>
           </div>
 
-          {/* Order notes */}
           {order.notes && (
-            <div className="mb-4 text-sm border-t border-dashed border-gray-400 pt-3">
-              <p className="font-bold mb-1">Observações:</p>
+            <div className="mt-3 text-sm border-t border-dashed border-gray-400 pt-2">
+              <p className="font-semibold">Observações:</p>
               <p>{order.notes}</p>
             </div>
           )}
 
-          {/* Footer */}
-          <div className="text-center text-sm border-t-2 border-black pt-4 mt-6">
-            <p className="font-semibold">Obrigado pela preferência!</p>
-            <p className="text-xs text-gray-600 mt-2">Impresso em {new Date().toLocaleString("pt-BR")}</p>
+          <div className="text-center text-[11px] text-gray-600 mt-3 pt-2 border-t border-gray-300">
+            <p>Impresso em {new Date().toLocaleString("pt-BR")}</p>
           </div>
         </div>
       </div>
@@ -243,9 +230,15 @@ export default function CustomerPrintPage({ params }: PageProps) {
           body {
             margin: 0;
             padding: 0;
+            background: white;
           }
           @page {
-            margin: 0.5cm;
+            margin: 3mm;
+            size: 100mm 150mm;
+          }
+          .ticket {
+            width: 100mm !important;
+            max-width: 100mm !important;
           }
         }
       `}</style>
