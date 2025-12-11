@@ -390,6 +390,13 @@ export default function PdvPage() {
 
   const isEntrega = draft.tipoPedido === "ENTREGA"
 
+  // Sempre que seleciona cliente ou muda para entrega, aplica taxa padrão do cliente
+  useEffect(() => {
+    if (isEntrega && draft.customer) {
+      setDeliveryFee(draft.customer.delivery_fee_default || 0)
+    }
+  }, [isEntrega, draft.customer, setDeliveryFee])
+
   return (
     <>
       <div className="container mx-auto max-w-7xl px-6 py-6">
@@ -704,19 +711,6 @@ export default function PdvPage() {
                 {isEntrega && draft.customer && (
                   <div className="space-y-3 border-t pt-3">
                     <Label>Taxa de entrega</Label>
-
-                    {draft.customer?.cep && (
-                      <Button
-                        variant="outline"
-                        className="w-full bg-transparent"
-                        onClick={handleCalculateDeliveryFee}
-                        disabled={isCalculatingFee}
-                      >
-                        <Calculator className="mr-2 h-4 w-4" />
-                        {isCalculatingFee ? "Calculando..." : "Calcular taxa"}
-                      </Button>
-                    )}
-
                     <div className="flex items-center gap-2">
                       <Label htmlFor="delivery-fee">R$</Label>
                       <Input
