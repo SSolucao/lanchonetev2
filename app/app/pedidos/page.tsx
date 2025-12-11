@@ -16,7 +16,8 @@ const STATUS_COLUMNS: Array<{ key: OrderStatus; label: string; color: string }> 
   { key: "EM_PREPARO", label: "Em preparo", color: "bg-yellow-100 dark:bg-yellow-950" },
   { key: "SAIU_PARA_ENTREGA", label: "Saiu para entrega", color: "bg-purple-100 dark:bg-purple-950" },
   { key: "FINALIZADO", label: "Finalizado", color: "bg-green-100 dark:bg-green-950" },
-  { key: "CANCELADO", label: "Cancelado", color: "bg-red-100 dark:bg-red-950" },
+  // Coluna cancelado ocultada para reduzir poluição visual
+  // { key: "CANCELADO", label: "Cancelado", color: "bg-red-100 dark:bg-red-950" },
 ]
 
 export default function PedidosPage() {
@@ -116,7 +117,7 @@ export default function PedidosPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {ordersByStatus.map((column) => (
             <div key={column.key} className="space-y-3">
               <div className={`${column.color} p-3 rounded-lg`}>
