@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Search, Plus, Minus, Trash2, Calculator, CheckCircle } from "lucide-react"
 import type { Product, PaymentMethod, Customer, Restaurant } from "@/src/domain/types"
 import { formatPhone, formatCEP, unformatNumbers, fetchAddressFromCEP } from "@/lib/format-utils"
+import { CustomerFormDialog } from "@/src/components/CustomerFormDialog"
 
 export default function PdvPage() {
   const { toast } = useToast()
@@ -390,7 +391,8 @@ export default function PdvPage() {
   const isEntrega = draft.tipoPedido === "ENTREGA"
 
   return (
-    <div className="container mx-auto max-w-7xl px-6 py-6">
+    <>
+      <div className="container mx-auto max-w-7xl px-6 py-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1">
           <Card>
@@ -783,6 +785,18 @@ export default function PdvPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+
+      <CustomerFormDialog
+        open={showNewCustomerForm}
+        customer={null}
+        onClose={(saved) => {
+          setShowNewCustomerForm(false)
+          if (saved) {
+            setCustomerSearchTerm("")
+          }
+        }}
+      />
+    </>
   )
 }

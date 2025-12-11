@@ -92,9 +92,16 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
     try {
       setLoading(true)
 
+      let cleanPhone = phone ? unformatNumbers(phone) : null
+      if (cleanPhone) {
+        if (!cleanPhone.startsWith("55")) {
+          cleanPhone = `55${cleanPhone}`
+        }
+      }
+
       const body = {
         name,
-        phone: phone ? unformatNumbers(phone) : null,
+        phone: cleanPhone,
         cep: cep ? unformatNumbers(cep) : null,
         street: street || null,
         number: number || null,
