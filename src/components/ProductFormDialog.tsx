@@ -315,6 +315,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
               <SelectContent>
                 <SelectItem value="Lanches">Lanches</SelectItem>
                 <SelectItem value="Hotdog">Hotdog</SelectItem>
+                <SelectItem value="Porções">Porções</SelectItem>
                 <SelectItem value="Bebidas">Bebidas</SelectItem>
                 <SelectItem value="Sobremesas">Sobremesas</SelectItem>
                 <SelectItem value="Doces">Doces</SelectItem>
