@@ -308,7 +308,19 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
 
           <div className="space-y-2">
             <Label>Categoria</Label>
-            <Input value={category} onChange={(e) => setCategory(e.target.value)} />
+            <Select value={category} onValueChange={(v) => setCategory(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Lanches">Lanches</SelectItem>
+                <SelectItem value="Hotdog">Hotdog</SelectItem>
+                <SelectItem value="Bebidas">Bebidas</SelectItem>
+                <SelectItem value="Sobremesas">Sobremesas</SelectItem>
+                <SelectItem value="Doces">Doces</SelectItem>
+                <SelectItem value="Outros">Outros</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
