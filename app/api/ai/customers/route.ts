@@ -3,6 +3,16 @@ import { createClient } from "@/lib/supabase/server"
 import { fetchAddressFromCEP } from "@/lib/format-utils"
 import { calculateDeliveryFee, buildFullAddress } from "@/src/services/deliveryFeeService"
 import { logApiCall } from "@/src/services/apiLogService"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (supabaseUrl && serviceKey) {
+    return createSupabaseClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  }
+  return null
+}
 
 // GET /api/ai/customers?phone=5511933851277
 export async function GET(request: Request) {
@@ -26,6 +36,10 @@ export async function GET(request: Request) {
     }
 
     const supabase = await createClient()
+    const admin = getSupabaseAdmin()
+    if (!admin) {
+      console.warn("[api/ai/customers] SUPABASE_SERVICE_ROLE_KEY ausente - last_order pode não aparecer")
+    }
 
     // Get restaurant
     const { data: restaurant } = await supabase.from("restaurants").select("*").limit(1).single()
@@ -68,7 +82,8 @@ export async function GET(request: Request) {
       ? `${customer.street}, ${customer.number || "s/n"} - ${customer.neighborhood}, ${customer.city}`
       : null
 
-    const { data: lastOrder } = await supabase
+    const supabaseRead = admin || supabase
+    const { data: lastOrder } = await supabaseRead
       .from("orders")
       .select(`
         id,
@@ -76,10 +91,12 @@ export async function GET(request: Request) {
         status,
         total,
         created_at,
-        order_type,
+        tipo_pedido,
         order_items (
+          id,
           quantity,
-          price,
+          unit_price,
+          total_price,
           notes,
           products (
             id,
@@ -87,10 +104,11 @@ export async function GET(request: Request) {
           )
         )
       `)
+      .eq("restaurant_id", restaurant.id)
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     // Formatar dados do último pedido se existir
     const lastOrderFormatted = lastOrder
@@ -99,11 +117,11 @@ export async function GET(request: Request) {
           status: lastOrder.status,
           total: lastOrder.total,
           date: lastOrder.created_at,
-          type: lastOrder.order_type,
+          type: lastOrder.tipo_pedido,
           items: lastOrder.order_items?.map((item: any) => ({
             product: item.products?.name || "Produto removido",
             quantity: item.quantity,
-            price: item.price,
+            price: item.unit_price,
             notes: item.notes,
           })),
         }
