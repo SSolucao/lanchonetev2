@@ -7,6 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import type { Restaurant, PaymentMethod, DeliveryRule } from "@/src/domain/types"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { PaymentMethodFormDialog } from "@/src/components/PaymentMethodFormDialog"
@@ -32,6 +42,9 @@ export default function ConfiguracoesPage() {
   const [deliveryRules, setDeliveryRules] = useState<DeliveryRule[]>([])
   const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false)
   const [editingDeliveryRule, setEditingDeliveryRule] = useState<DeliveryRule | null>(null)
+  const [deleteRuleDialogOpen, setDeleteRuleDialogOpen] = useState(false)
+  const [ruleToDelete, setRuleToDelete] = useState<DeliveryRule | null>(null)
+  const [deletingRule, setDeletingRule] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -130,16 +143,25 @@ export default function ConfiguracoesPage() {
     }
   }
 
-  async function handleDeleteDeliveryRule(id: string) {
-    if (!confirm("Tem certeza que deseja excluir esta regra?")) return
+  function handleDeleteDeliveryRule(rule: DeliveryRule) {
+    setRuleToDelete(rule)
+    setDeleteRuleDialogOpen(true)
+  }
 
+  async function confirmDeleteRule() {
+    if (!ruleToDelete) return
     try {
-      const response = await fetch(`/api/delivery-rules/${id}`, { method: "DELETE" })
+      setDeletingRule(true)
+      const response = await fetch(`/api/delivery-rules/${ruleToDelete.id}`, { method: "DELETE" })
       if (!response.ok) throw new Error("Failed to delete rule")
       loadData()
+      setDeleteRuleDialogOpen(false)
+      setRuleToDelete(null)
     } catch (error) {
       console.error("Error deleting rule:", error)
       alert("Erro ao excluir regra")
+    } finally {
+      setDeletingRule(false)
     }
   }
 
@@ -153,11 +175,12 @@ export default function ConfiguracoesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Configurações</h1>
-        <p className="text-muted-foreground mt-2">Configurações do sistema e restaurante</p>
-      </div>
+    <>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Configurações</h1>
+          <p className="text-muted-foreground mt-2">Configurações do sistema e restaurante</p>
+        </div>
 
       <Tabs defaultValue="restaurant" className="space-y-4">
         <TabsList>
@@ -291,7 +314,7 @@ export default function ConfiguracoesPage() {
                             <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule.id)}>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </td>
@@ -336,7 +359,7 @@ export default function ConfiguracoesPage() {
                             <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule.id)}>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </td>
@@ -365,6 +388,30 @@ export default function ConfiguracoesPage() {
         deliveryRule={editingDeliveryRule}
         onClose={handleDeliveryDialogClose}
       />
-    </div>
+      </div>
+
+      <AlertDialog open={deleteRuleDialogOpen} onOpenChange={setDeleteRuleDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja deletar a regra{" "}
+              <strong>
+                {ruleToDelete?.neighborhood
+                  ? `de bairro ${ruleToDelete.neighborhood}`
+                  : `de distância ${ruleToDelete?.from_km || ""}-${ruleToDelete?.to_km || ""} km`}
+              </strong>
+              ? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingRule}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteRule} disabled={deletingRule} variant="destructive">
+              {deletingRule ? "Deletando..." : "Deletar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
