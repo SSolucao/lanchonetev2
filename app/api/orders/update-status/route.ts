@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { updateOrderStatus } from "@/src/services/ordersService"
 import { onOrderStatusChanged } from "@/src/services/n8nClient"
+import { sendWhatsAppMenu, sendWhatsAppText } from "@/src/services/whatsappService"
 import type { OrderStatus } from "@/src/domain/types"
 
 export async function POST(request: NextRequest) {
@@ -46,6 +47,59 @@ export async function POST(request: NextRequest) {
         newStatus,
         timestamp: new Date().toISOString(),
       }).catch((err) => console.error("[v0] Failed to notify n8n:", err))
+    }
+
+    // Notificações WhatsApp
+    if (newStatus === "EM_PREPARO" || newStatus === "SAIU_PARA_ENTREGA") {
+      try {
+        const { data: orderData, error: orderError } = await supabase
+          .from("orders")
+          .select(
+            `
+            id,
+            order_number,
+            restaurant:restaurants(name),
+            customer:customers(name, phone)
+          `,
+          )
+          .eq("id", orderId)
+          .single()
+
+        if (orderError) {
+          console.error("[v0] Error fetching order for WhatsApp notification:", orderError)
+        } else if (orderData?.customer?.phone) {
+          const customerName = orderData.customer.name || ""
+          const restaurantName = orderData.restaurant?.name || "nosso time"
+
+          if (newStatus === "EM_PREPARO" && oldStatus !== "EM_PREPARO") {
+            const text = `Olá${customerName ? `, ${customerName}` : ""}! Seu pedido #${
+              orderData.order_number
+            } está em preparo. Avisaremos assim que sair para entrega. Obrigado! – ${restaurantName}`
+
+            sendWhatsAppText({ number: orderData.customer.phone, text }).catch((err) =>
+              console.error("[v0] Error sending WhatsApp message:", err),
+            )
+          }
+
+          if (newStatus === "SAIU_PARA_ENTREGA" && oldStatus !== "SAIU_PARA_ENTREGA") {
+            const text =
+              "Seu pedido acabou de sair, por favor, assim que receber seu pedido por favor avalie ou se tiver qualque problam, selecione abaixo"
+            const num = orderData.order_number
+            const choices = [
+              `Recebi meu pedido #${num}|pedido`,
+              `Tive um problema com meu pedido #${num}|pedido`,
+            ]
+
+            sendWhatsAppMenu({
+              number: orderData.customer.phone,
+              text,
+              choices,
+            }).catch((err) => console.error("[v0] Error sending WhatsApp menu:", err))
+          }
+        }
+      } catch (err) {
+        console.error("[v0] Error preparing WhatsApp notification:", err)
+      }
     }
 
     return NextResponse.json({ success: true, order: updatedOrder })
