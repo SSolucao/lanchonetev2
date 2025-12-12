@@ -37,6 +37,9 @@ export default function ConfiguracoesPage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null)
+  const [deletePaymentDialogOpen, setDeletePaymentDialogOpen] = useState(false)
+  const [paymentToDelete, setPaymentToDelete] = useState<PaymentMethod | null>(null)
+  const [deletingPayment, setDeletingPayment] = useState(false)
 
   // Delivery rules
   const [deliveryRules, setDeliveryRules] = useState<DeliveryRule[]>([])
@@ -112,6 +115,11 @@ export default function ConfiguracoesPage() {
     setPaymentDialogOpen(true)
   }
 
+  function handleDeletePayment(method: PaymentMethod) {
+    setPaymentToDelete(method)
+    setDeletePaymentDialogOpen(true)
+  }
+
   function handleCreatePaymentMethod() {
     setEditingPaymentMethod(null)
     setPaymentDialogOpen(true)
@@ -122,6 +130,23 @@ export default function ConfiguracoesPage() {
     setEditingPaymentMethod(null)
     if (saved) {
       loadData()
+    }
+  }
+
+  async function confirmDeletePayment() {
+    if (!paymentToDelete) return
+    try {
+      setDeletingPayment(true)
+      const response = await fetch(`/api/payment-methods/${paymentToDelete.id}`, { method: "DELETE" })
+      if (!response.ok) throw new Error("Failed to delete payment method")
+      loadData()
+      setDeletePaymentDialogOpen(false)
+      setPaymentToDelete(null)
+    } catch (error) {
+      console.error("Error deleting payment method:", error)
+      alert("Erro ao excluir forma de pagamento")
+    } finally {
+      setDeletingPayment(false)
     }
   }
 
@@ -254,6 +279,14 @@ export default function ConfiguracoesPage() {
                         <td className="p-3 text-center">
                           <Button variant="ghost" size="sm" onClick={() => handleEditPaymentMethod(method)}>
                             <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeletePayment(method)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </td>
                       </tr>
@@ -408,6 +441,24 @@ export default function ConfiguracoesPage() {
             <AlertDialogCancel disabled={deletingRule}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteRule} disabled={deletingRule} variant="destructive">
               {deletingRule ? "Deletando..." : "Deletar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deletePaymentDialogOpen} onOpenChange={setDeletePaymentDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja deletar a forma de pagamento{" "}
+              <strong>{paymentToDelete?.name}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingPayment}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeletePayment} disabled={deletingPayment} variant="destructive">
+              {deletingPayment ? "Deletando..." : "Deletar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
