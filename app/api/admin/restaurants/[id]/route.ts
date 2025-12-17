@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getRestaurantById } from "@/src/services/restaurantsService"
+import { createClient } from "@/lib/supabase/server"
 
 function isAuthorized(request: Request): boolean {
   const expected = process.env.ADMIN_API_TOKEN
@@ -28,6 +29,13 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       return NextResponse.json({ error: "Restaurant not found" }, { status: 404 })
     }
 
+    const supabase = await createClient()
+    const { data: paymentMethods } = await supabase
+      .from("payment_methods")
+      .select("id, name, is_active")
+      .eq("restaurant_id", restaurant.id)
+      .order("name", { ascending: true })
+
     // Admin payload includes Pix
     const adminRestaurant = {
       id: restaurant.id,
@@ -43,6 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       delivery_eta_max: restaurant.delivery_eta_max ?? null,
       pix_key_type: restaurant.pix_key_type ?? null,
       pix_key: restaurant.pix_key ?? null,
+      payment_methods: paymentMethods || [],
     }
 
     return NextResponse.json(adminRestaurant)
@@ -51,4 +60,3 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "Failed to get restaurant" }, { status: 500 })
   }
 }
-

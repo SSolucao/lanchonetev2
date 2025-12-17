@@ -167,11 +167,18 @@ export async function POST(request: Request) {
     let payment_method_id = null
     let payment_method_display = null
 
+    const normalizedPaymentMethodName = String(payment_method_name).trim()
+    const paymentNamePattern =
+      normalizedPaymentMethodName.includes("%") || normalizedPaymentMethodName.includes("_")
+        ? normalizedPaymentMethodName
+        : `%${normalizedPaymentMethodName}%`
+
     const { data: paymentMethod } = await supabase
       .from("payment_methods")
       .select("id, name")
       .eq("restaurant_id", restaurant.id)
-      .ilike("name", payment_method_name)
+      .eq("is_active", true)
+      .ilike("name", paymentNamePattern)
       .limit(1)
       .single()
 
