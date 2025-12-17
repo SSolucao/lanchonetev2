@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   AlertDialog,
@@ -32,6 +33,10 @@ export default function ConfiguracoesPage() {
   const [name, setName] = useState("")
   const [cepOrigem, setCepOrigem] = useState("")
   const [address, setAddress] = useState("")
+  const [deliveryEtaMin, setDeliveryEtaMin] = useState("")
+  const [deliveryEtaMax, setDeliveryEtaMax] = useState("")
+  const [pixKeyType, setPixKeyType] = useState("")
+  const [pixKey, setPixKey] = useState("")
 
   // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -68,6 +73,18 @@ export default function ConfiguracoesPage() {
         setName(restaurantData.name)
         setCepOrigem(restaurantData.cep_origem)
         setAddress(restaurantData.address)
+        setDeliveryEtaMin(
+          restaurantData.delivery_eta_min === null || restaurantData.delivery_eta_min === undefined
+            ? ""
+            : String(restaurantData.delivery_eta_min),
+        )
+        setDeliveryEtaMax(
+          restaurantData.delivery_eta_max === null || restaurantData.delivery_eta_max === undefined
+            ? ""
+            : String(restaurantData.delivery_eta_max),
+        )
+        setPixKeyType(restaurantData.pix_key_type || "")
+        setPixKey(restaurantData.pix_key || "")
       }
 
       if (paymentRes.ok) {
@@ -92,11 +109,84 @@ export default function ConfiguracoesPage() {
     if (!restaurant) return
 
     try {
+      const etaMin = deliveryEtaMin.trim() === "" ? null : Number(deliveryEtaMin)
+      const etaMax = deliveryEtaMax.trim() === "" ? null : Number(deliveryEtaMax)
+
+      if (etaMin !== null && (!Number.isFinite(etaMin) || etaMin < 0 || !Number.isInteger(etaMin))) {
+        alert("Tempo mínimo deve ser um número inteiro (minutos).")
+        return
+      }
+      if (etaMax !== null && (!Number.isFinite(etaMax) || etaMax < 0 || !Number.isInteger(etaMax))) {
+        alert("Tempo máximo deve ser um número inteiro (minutos).")
+        return
+      }
+      if (etaMin !== null && etaMax !== null && etaMax < etaMin) {
+        alert("Tempo máximo não pode ser menor que o tempo mínimo.")
+        return
+      }
+
+      const normalizedPixKeyType = pixKeyType.trim() === "" ? null : pixKeyType.trim().toUpperCase()
+      const rawPixKey = pixKey.trim()
+
+      if (normalizedPixKeyType && rawPixKey === "") {
+        alert("Preencha a chave Pix.")
+        return
+      }
+      if (!normalizedPixKeyType && rawPixKey !== "") {
+        alert("Selecione o tipo da chave Pix.")
+        return
+      }
+
+      let normalizedPixKey: string | null = rawPixKey === "" ? null : rawPixKey
+      if (normalizedPixKeyType && normalizedPixKey) {
+        if (normalizedPixKeyType === "PHONE") {
+          normalizedPixKey = normalizedPixKey.replace(/\D/g, "").slice(0, 11)
+          if (![10, 11].includes(normalizedPixKey.length)) {
+            alert("Chave Pix (Telefone) deve ter 10 ou 11 dígitos (DDD + número).")
+            return
+          }
+        } else if (normalizedPixKeyType === "CPF") {
+          normalizedPixKey = normalizedPixKey.replace(/\D/g, "").slice(0, 11)
+          if (normalizedPixKey.length !== 11) {
+            alert("Chave Pix (CPF) deve ter 11 dígitos (apenas números).")
+            return
+          }
+        } else if (normalizedPixKeyType === "CNPJ") {
+          normalizedPixKey = normalizedPixKey.replace(/\D/g, "").slice(0, 14)
+          if (normalizedPixKey.length !== 14) {
+            alert("Chave Pix (CNPJ) deve ter 14 dígitos (apenas números).")
+            return
+          }
+        } else if (normalizedPixKeyType === "EMAIL") {
+          if (!normalizedPixKey.includes("@")) {
+            alert("Chave Pix (Email) precisa conter '@'.")
+            return
+          }
+        } else if (normalizedPixKeyType === "RANDOM") {
+          if (/\s/.test(normalizedPixKey)) {
+            alert("Chave Pix (Aleatória) não deve conter espaços.")
+            return
+          }
+          if (normalizedPixKey.length < 10) {
+            alert("Chave Pix (Aleatória) parece curta demais.")
+            return
+          }
+        }
+      }
+
       setSaving(true)
       const response = await fetch("/api/restaurant", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, cep_origem: cepOrigem, address }),
+        body: JSON.stringify({
+          name,
+          cep_origem: cepOrigem,
+          address,
+          delivery_eta_min: etaMin,
+          delivery_eta_max: etaMax,
+          pix_key_type: normalizedPixKeyType,
+          pix_key: normalizedPixKey,
+        }),
       })
 
       if (!response.ok) throw new Error("Failed to save restaurant")
@@ -232,6 +322,96 @@ export default function ConfiguracoesPage() {
               <div className="space-y-2">
                 <Label>Endereço completo *</Label>
                 <Input value={address} onChange={(e) => setAddress(e.target.value)} required />
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Entrega</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tempo mínimo (min)</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={deliveryEtaMin}
+                      onChange={(e) => setDeliveryEtaMin(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                      placeholder="Ex: 30"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tempo máximo (min)</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={deliveryEtaMax}
+                      onChange={(e) => setDeliveryEtaMax(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                      placeholder="Ex: 40"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {deliveryEtaMin && deliveryEtaMax
+                    ? `Estimativa atual: ${deliveryEtaMin}–${deliveryEtaMax} min`
+                    : "Defina uma estimativa para informar ao cliente (ex: 30–40 min)."}
+                </p>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Pix (somente admin)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tipo de chave Pix</Label>
+                    <Select
+                      value={pixKeyType}
+                      onValueChange={(v) => {
+                        setPixKeyType(v)
+                        setPixKey("")
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PHONE">Telefone</SelectItem>
+                        <SelectItem value="EMAIL">Email</SelectItem>
+                        <SelectItem value="CPF">CPF</SelectItem>
+                        <SelectItem value="CNPJ">CNPJ</SelectItem>
+                        <SelectItem value="RANDOM">Chave aleatória</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Chave Pix</Label>
+                    <Input
+                      value={pixKey}
+                      onChange={(e) => {
+                        const next = e.target.value
+                        if (pixKeyType === "PHONE") return setPixKey(next.replace(/\D/g, "").slice(0, 11))
+                        if (pixKeyType === "CPF") return setPixKey(next.replace(/\D/g, "").slice(0, 11))
+                        if (pixKeyType === "CNPJ") return setPixKey(next.replace(/\D/g, "").slice(0, 14))
+                        return setPixKey(next)
+                      }}
+                      placeholder={
+                        pixKeyType === "PHONE"
+                          ? "DDD + número (10 ou 11 dígitos)"
+                          : pixKeyType === "CPF"
+                            ? "11 dígitos (somente números)"
+                            : pixKeyType === "CNPJ"
+                              ? "14 dígitos (somente números)"
+                              : pixKeyType === "EMAIL"
+                                ? "email@dominio.com"
+                                : pixKeyType === "RANDOM"
+                                  ? "Chave aleatória (sem espaços)"
+                                  : "Selecione o tipo primeiro"
+                      }
+                      disabled={!pixKeyType}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {pixKeyType === "PHONE" && "Telefone para Pix: apenas DDD + número (com ou sem 9º dígito)."}
+                      {pixKeyType === "EMAIL" && "Validação simples: precisa conter '@'."}
+                      {pixKeyType === "CPF" && "CPF: 11 dígitos, apenas números."}
+                      {pixKeyType === "CNPJ" && "CNPJ: 14 dígitos, apenas números."}
+                      {pixKeyType === "RANDOM" && "Chave aleatória: código gerado pelo banco (evite espaços)."}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end">

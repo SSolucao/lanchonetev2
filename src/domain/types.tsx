@@ -10,6 +10,15 @@ export interface Restaurant {
   name: string
   cep_origem: string
   address: string
+  street: string | null
+  number: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  delivery_eta_min: number | null
+  delivery_eta_max: number | null
+  pix_key_type: string | null
+  pix_key: string | null
   created_at: string
   updated_at: string
 }
@@ -188,6 +197,15 @@ export interface CreateRestaurantInput {
   name: string
   cep_origem: string
   address: string
+  street?: string | null
+  number?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  state?: string | null
+  delivery_eta_min?: number | null
+  delivery_eta_max?: number | null
+  pix_key_type?: string | null
+  pix_key?: string | null
 }
 
 export interface CreateUserInput {
