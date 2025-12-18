@@ -3,6 +3,44 @@ import { createClient } from "@/lib/supabase/server"
 import { createOrderWithItems, getNextOrderNumber } from "@/src/services/ordersService"
 import { logApiCall } from "@/src/services/apiLogService"
 
+function normalizeForSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase()
+}
+
+function pickBestPaymentMethodByName(
+  inputName: string,
+  methods: Array<{ id: string; name: string }>,
+): { id: string; name: string } | null {
+  const input = normalizeForSearch(inputName)
+  if (!input) return null
+
+  let best: { method: { id: string; name: string }; score: number; diff: number } | null = null
+
+  for (const method of methods) {
+    const candidate = normalizeForSearch(method.name)
+    if (!candidate) continue
+
+    let score = 0
+    if (candidate === input) score = 3
+    else if (candidate.startsWith(input) || input.startsWith(candidate)) score = 2
+    else if (candidate.includes(input) || input.includes(candidate)) score = 1
+
+    if (score === 0) continue
+
+    const diff = Math.abs(candidate.length - input.length)
+    if (!best || score > best.score || (score === best.score && diff < best.diff)) {
+      best = { method, score, diff }
+    }
+  }
+
+  return best?.method ?? null
+}
+
 function parseItensPedido(itensPedido: string): Array<{
   product_id: string
   quantity: number
@@ -167,23 +205,18 @@ export async function POST(request: Request) {
     let payment_method_id = null
     let payment_method_display = null
 
-    const normalizedPaymentMethodName = String(payment_method_name).trim()
-    const paymentNamePattern =
-      normalizedPaymentMethodName.includes("%") || normalizedPaymentMethodName.includes("_")
-        ? normalizedPaymentMethodName
-        : `%${normalizedPaymentMethodName}%`
-
-    const { data: paymentMethod } = await supabase
+    const { data: paymentMethods } = await supabase
       .from("payment_methods")
       .select("id, name")
       .eq("restaurant_id", restaurant.id)
       .eq("is_active", true)
-      .ilike("name", paymentNamePattern)
-      .limit(1)
-      .single()
+      .order("name", { ascending: true })
+
+    const paymentMethod = pickBestPaymentMethodByName(String(payment_method_name), paymentMethods || [])
 
     if (!paymentMethod) {
       statusCode = 400
+      const availablePaymentMethods = (paymentMethods || []).map((m) => m.name)
       await logApiCall({
         route: "/api/ai/orders",
         method: "POST",
@@ -193,8 +226,17 @@ export async function POST(request: Request) {
         error: `Payment method not found: ${payment_method_name}`,
         restaurant_id: restaurant.id,
         customer_id: customer.id,
+        metadata: {
+          available_payment_methods: availablePaymentMethods,
+        },
       })
-      return NextResponse.json({ error: `Payment method not found: ${payment_method_name}` }, { status: statusCode })
+      return NextResponse.json(
+        {
+          error: `Payment method not found: ${payment_method_name}`,
+          available_payment_methods: availablePaymentMethods,
+        },
+        { status: statusCode },
+      )
     }
 
     payment_method_id = paymentMethod.id
