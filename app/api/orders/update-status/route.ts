@@ -5,32 +5,76 @@ import { onOrderStatusChanged } from "@/src/services/n8nClient"
 import { sendWhatsAppMenu, sendWhatsAppText } from "@/src/services/whatsappService"
 import type { OrderStatus } from "@/src/domain/types"
 
+type OrderStatusPayload = {
+  orderId?: string
+  order_number?: number
+  newStatus: OrderStatus
+  restaurantId?: string
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { orderId, newStatus, restaurantId } = await request.json()
+    const { orderId: rawOrderId, order_number, newStatus, restaurantId: rawRestaurantId } =
+      (await request.json()) as OrderStatusPayload
 
-    console.log("[v0] Updating order status:", { orderId, newStatus, restaurantId })
+    console.log("[v0] Updating order status:", { orderId: rawOrderId, order_number, newStatus, restaurantId: rawRestaurantId })
 
-    if (!orderId || !newStatus) {
-      return NextResponse.json({ error: "Order ID and new status are required" }, { status: 400 })
+    if ((!rawOrderId && order_number === undefined) || !newStatus) {
+      return NextResponse.json(
+        { error: "orderId OR order_number and newStatus are required" },
+        { status: 400 },
+      )
     }
 
     const supabase = await createClient()
-    const { data: oldOrderData, error: fetchError } = await supabase
-      .from("orders")
-      .select("status")
-      .eq("id", orderId)
-      .single()
 
-    if (fetchError) {
-      console.error("[v0] Error fetching old order:", fetchError)
-      return NextResponse.json({ error: "Failed to fetch order" }, { status: 500 })
+    let orderId = rawOrderId ?? null
+    let restaurantId = rawRestaurantId ?? null
+    let oldStatus: OrderStatus | null = null
+
+    // Resolve pelo número se vier apenas order_number
+    if (!orderId && order_number !== undefined) {
+      let query = supabase
+        .from("orders")
+        .select("id, status, restaurant_id")
+        .eq("order_number", order_number)
+        .limit(1)
+        .single()
+
+      if (restaurantId) {
+        query = query.eq("restaurant_id", restaurantId)
+      }
+
+      const { data: orderByNumber, error } = await query
+      if (error || !orderByNumber) {
+        console.error("[v0] Order not found by number:", { order_number, restaurantId, error })
+        return NextResponse.json({ error: `Order not found for number ${order_number}` }, { status: 404 })
+      }
+
+      orderId = orderByNumber.id
+      oldStatus = orderByNumber.status as OrderStatus
+      if (!restaurantId) restaurantId = orderByNumber.restaurant_id
     }
 
-    const oldStatus = oldOrderData.status
+    // Caso não tenha oldStatus ainda (veio via orderId)
+    if (!oldStatus) {
+      const { data: oldOrderData, error: fetchError } = await supabase
+        .from("orders")
+        .select("status, restaurant_id")
+        .eq("id", orderId)
+        .single()
+
+      if (fetchError || !oldOrderData) {
+        console.error("[v0] Error fetching old order:", fetchError)
+        return NextResponse.json({ error: "Failed to fetch order" }, { status: 500 })
+      }
+
+      oldStatus = oldOrderData.status as OrderStatus
+      if (!restaurantId) restaurantId = oldOrderData.restaurant_id
+    }
 
     // Now update the order status
-    const updatedOrder = await updateOrderStatus(orderId, newStatus as OrderStatus)
+    const updatedOrder = await updateOrderStatus(orderId!, newStatus as OrderStatus)
 
     console.log("[v0] Order status updated successfully:", {
       orderId,
@@ -42,7 +86,7 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Notifying n8n about status change")
       onOrderStatusChanged({
         restaurantId,
-        orderId,
+        orderId: orderId!,
         oldStatus,
         newStatus,
         timestamp: new Date().toISOString(),
