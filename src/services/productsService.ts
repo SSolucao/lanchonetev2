@@ -15,17 +15,16 @@ export interface ProductFilters {
   type?: "UNIT" | "COMBO"
   category?: string
   is_active?: boolean
+  include_inactive?: boolean
 }
 
 export async function listProducts(restaurantId: string, filters?: ProductFilters): Promise<Product[]> {
   const supabase = await createClient()
   let query = supabase.from("products").select("*").eq("restaurant_id", restaurantId)
 
-  if (filters?.is_active !== undefined) {
-    query = query.eq("active", filters.is_active)
-  } else {
-    // Default: only show active products
-    query = query.eq("active", true)
+  if (!filters?.include_inactive) {
+    const activeFilter = filters?.is_active ?? true
+    query = query.eq("is_active", activeFilter)
   }
 
   if (filters?.type) {
@@ -78,8 +77,23 @@ export async function updateProduct(
 
 export async function deleteProduct(id: string): Promise<void> {
   const supabase = await createClient()
-  // Mark as inactive instead of deleting
-  const { error } = await supabase.from("products").update({ active: false }).eq("id", id)
+
+  // Block deletion if product is used in orders
+  const { data: linkedOrderItem, error: linkedError } = await supabase
+    .from("order_items")
+    .select("id")
+    .eq("product_id", id)
+    .limit(1)
+
+  if (linkedError) throw linkedError
+  if (linkedOrderItem && linkedOrderItem.length > 0) {
+    const err = new Error("Produto possui pedidos vinculados")
+    ;(err as any).code = "PRODUCT_IN_USE"
+    ;(err as any).status = 409
+    throw err
+  }
+
+  const { error } = await supabase.from("products").delete().eq("id", id)
 
   if (error) throw error
 }
@@ -196,7 +210,7 @@ export async function saveProductWithRecipe(
     const { is_active, ...otherUpdates } = productData.updates as any
     const updatesToApply = {
       ...otherUpdates,
-      ...(is_active !== undefined ? { is_active: is_active, active: is_active } : {}),
+      ...(is_active !== undefined ? { is_active } : {}),
     }
 
     console.log("[v0] Updating product with:", updatesToApply)
@@ -231,7 +245,7 @@ export async function saveProductWithRecipe(
     const { is_active, ...otherData } = productData as any
     const dataToInsert = {
       ...otherData,
-      ...(is_active !== undefined ? { is_active: is_active, active: is_active } : {}),
+      ...(is_active !== undefined ? { is_active } : {}),
     }
 
     const { data, error } = await supabase.from("products").insert(dataToInsert).select().single()
@@ -283,7 +297,7 @@ export async function saveComboWithItems(
     const { is_active, ...otherUpdates } = comboData.updates as any
     const updatesToApply = {
       ...otherUpdates,
-      ...(is_active !== undefined ? { is_active: is_active, active: is_active } : {}),
+      ...(is_active !== undefined ? { is_active } : {}),
     }
 
     console.log("[v0] Updating combo with:", updatesToApply)
@@ -318,7 +332,7 @@ export async function saveComboWithItems(
     const { is_active, ...otherData } = comboData as any
     const dataToInsert = {
       ...otherData,
-      ...(is_active !== undefined ? { is_active: is_active, active: is_active } : {}),
+      ...(is_active !== undefined ? { is_active } : {}),
     }
 
     const { data, error } = await supabase.from("products").insert(dataToInsert).select().single()

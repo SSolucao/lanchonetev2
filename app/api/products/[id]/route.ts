@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const updates = {
       ...productData,
-      ...(is_active !== undefined && { active: is_active, is_active }),
+      ...(is_active !== undefined && { is_active }),
     }
 
     const product = await getProductById(id)
@@ -91,9 +91,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     await deleteProduct(id)
-    return NextResponse.json({ success: true, message: "Product deactivated successfully" })
+    return NextResponse.json({ success: true, message: "Product deleted successfully" })
   } catch (error) {
     console.error("Error deleting product:", error)
+    if ((error as any)?.code === "PRODUCT_IN_USE" || (error as any)?.status === 409) {
+      return NextResponse.json(
+        { error: "Não é possível excluir: produto vinculado a pedidos. Desative em vez de remover." },
+        { status: 409 },
+      )
+    }
     return NextResponse.json({ error: "Failed to delete product" }, { status: 500 })
   }
 }

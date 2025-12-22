@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Plus, Search, Pencil, Trash2 } from "lucide-react"
 import type { Product } from "@/src/domain/types"
 import { ProductFormDialog } from "@/src/components/ProductFormDialog"
-import { useAuth } from "@/src/context/AuthContext"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function ProdutosPage() {
-  const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,6 +28,7 @@ export default function ProdutosPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function ProdutosPage() {
   async function loadProducts() {
     try {
       setLoading(true)
-      const response = await fetch("/api/products")
+      const response = await fetch("/api/products?include_inactive=1")
       if (!response.ok) throw new Error("Failed to load products")
       const data = await response.json()
       setProducts(data)
@@ -90,6 +90,26 @@ export default function ProdutosPage() {
     setDeleteDialogOpen(true)
   }
 
+  async function handleToggleActive(product: Product, isActive: boolean) {
+    try {
+      setUpdatingStatusId(product.id)
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: isActive }),
+      })
+      if (!response.ok) {
+        throw new Error("Failed to update product status")
+      }
+      await loadProducts()
+    } catch (error) {
+      console.error("Error toggling product status:", error)
+      alert("Erro ao atualizar status do produto. Tente novamente.")
+    } finally {
+      setUpdatingStatusId(null)
+    }
+  }
+
   async function confirmDelete() {
     if (!productToDelete) return
 
@@ -100,7 +120,14 @@ export default function ProdutosPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to delete product")
+        let message = "Failed to delete product"
+        try {
+          const body = await response.json()
+          if (body?.error) message = body.error
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(message)
       }
 
       await loadProducts()
@@ -108,7 +135,7 @@ export default function ProdutosPage() {
       setProductToDelete(null)
     } catch (error) {
       console.error("Error deleting product:", error)
-      alert("Erro ao deletar produto. Tente novamente.")
+      alert((error as Error)?.message || "Erro ao deletar produto. Tente novamente.")
     } finally {
       setDeleting(false)
     }
@@ -156,17 +183,17 @@ export default function ProdutosPage() {
         <div className="border rounded-lg">
           <table className="w-full">
             <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left p-3 font-medium">Nome</th>
-                <th className="text-left p-3 font-medium">Tipo</th>
-                <th className="text-left p-3 font-medium">Categoria</th>
-                <th className="text-right p-3 font-medium">Preço</th>
-                <th className="text-center p-3 font-medium">Ativo</th>
-                <th className="text-center p-3 font-medium">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.length === 0 ? (
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium">Nome</th>
+                    <th className="text-left p-3 font-medium">Tipo</th>
+                    <th className="text-left p-3 font-medium">Categoria</th>
+                    <th className="text-right p-3 font-medium">Preço</th>
+                    <th className="text-center p-3 font-medium">Status</th>
+                    <th className="text-center p-3 font-medium">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-8 text-muted-foreground">
                     Nenhum produto encontrado
@@ -174,16 +201,40 @@ export default function ProdutosPage() {
                 </tr>
               ) : (
                 filteredProducts.map((product) => (
-                  <tr key={product.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr
+                    key={product.id}
+                    className={`border-b last:border-0 hover:bg-muted/30 ${
+                      !product.is_active ? "opacity-70" : ""
+                    }`}
+                  >
                     <td className="p-3">{product.name}</td>
                     <td className="p-3">{product.type === "UNIT" ? "Produto" : "Combo"}</td>
                     <td className="p-3">{product.category || "—"}</td>
                     <td className="p-3 text-right">R$ {product.price.toFixed(2)}</td>
-                    <td className="p-3 text-center">{product.is_active ? "Sim" : "Não"}</td>
+                    <td className="p-3 text-center">
+                      {product.is_active ? (
+                        <Badge variant="secondary" className="text-xs">
+                          Ativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs border-destructive text-destructive">
+                          Inativo
+                        </Badge>
+                      )}
+                    </td>
                     <td className="p-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
                           <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleActive(product, !product.is_active)}
+                          disabled={updatingStatusId === product.id}
+                          className={!product.is_active ? "text-muted-foreground" : ""}
+                        >
+                          {product.is_active ? "Desativar" : "Reativar"}
                         </Button>
                         <Button
                           variant="ghost"
@@ -210,18 +261,19 @@ export default function ProdutosPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja deletar o produto <strong>{productToDelete?.name}</strong>? Esta ação não pode ser
-              desfeita.
+              Excluir remove definitivamente o produto{" "}
+              <strong>{productToDelete?.name}</strong>. Se ele estiver vinculado a pedidos, a exclusão será bloqueada —
+              use “Desativar” para ocultar do catálogo.
             </AlertDialogDescription>
           </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDelete} disabled={deleting} variant="destructive">
-                {deleting ? "Deletando..." : "Deletar"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} variant="destructive">
+              {deleting ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
