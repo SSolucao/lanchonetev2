@@ -21,12 +21,22 @@ interface Product {
   category: string
   type: string
   is_active: boolean
+  addons?: Array<Addon>
+}
+
+interface Addon {
+  id: string
+  name: string
+  price: number
+  category?: string
+  is_active?: boolean
 }
 
 interface CartItem {
   product: Product
   quantity: number
   observations: string
+  addons: Array<{ addon_id: string; name: string; price: number; quantity: number }>
 }
 
 interface Comanda {
@@ -74,6 +84,11 @@ export default function ComandasPage() {
   const [productSearchTerm, setProductSearchTerm] = useState("")
   const [cart, setCart] = useState<CartItem[]>([])
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [itemQuantity, setItemQuantity] = useState(1)
+  const [itemNotes, setItemNotes] = useState("")
+  const [selectedAddons, setSelectedAddons] = useState<Record<string, number>>({})
+  const [addons, setAddons] = useState<Addon[]>([])
 
   // Close comanda dialog
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false)
@@ -86,6 +101,7 @@ export default function ComandasPage() {
     fetchComandas()
     fetchProducts()
     fetchPaymentMethods()
+    fetchAddons()
   }, [])
 
   const fetchComandas = async () => {
@@ -110,7 +126,7 @@ export default function ComandasPage() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch("/api/products")
+      const res = await fetch("/api/products?include_addons=1")
       if (res.ok) {
         const data = await res.json()
         const activeProducts = data.filter((p: Product) => p.is_active)
@@ -123,6 +139,18 @@ export default function ComandasPage() {
       }
     } catch (error) {
       console.error("Error fetching products:", error)
+    }
+  }
+
+  const fetchAddons = async () => {
+    try {
+      const res = await fetch("/api/addons")
+      if (res.ok) {
+        const data = await res.json()
+        setAddons(data.filter((ad: Addon) => ad.is_active !== false))
+      }
+    } catch (error) {
+      console.error("Error fetching addons:", error)
     }
   }
 
@@ -192,13 +220,11 @@ export default function ComandasPage() {
   }
 
   const addToCart = (product: Product) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id)
-      if (existing) {
-        return prev.map((item) => (item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item))
-      }
-      return [...prev, { product, quantity: 1, observations: "" }]
-    })
+    // Abre modal de addons
+    setSelectedProduct(product)
+    setItemQuantity(1)
+    setItemNotes("")
+    setSelectedAddons({})
   }
 
   const removeFromCart = (productId: string) => {
@@ -220,7 +246,52 @@ export default function ComandasPage() {
     setCart((prev) => prev.map((item) => (item.product.id === productId ? { ...item, observations } : item)))
   }
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+  const cartTotal = cart.reduce((sum, item) => {
+    const addonsTotal = item.addons.reduce((acc, ad) => acc + ad.price * ad.quantity, 0)
+    return sum + (item.product.price + addonsTotal) * item.quantity
+  }, 0)
+
+  const toggleAddonQuantity = (addonId: string, delta: number) => {
+    setSelectedAddons((prev) => {
+      const current = prev[addonId] || 0
+      const next = Math.max(0, current + delta)
+      const newState = { ...prev, [addonId]: next }
+      if (next === 0) delete newState[addonId]
+      return newState
+    })
+  }
+
+  const resolveProductAddons = (product: Product) => {
+    if (product.addons && product.addons.length > 0) return product.addons
+    if (!product.category) return []
+    return addons.filter((ad) => ad.category === product.category && ad.is_active !== false)
+  }
+
+  const handleAddSelectedProduct = () => {
+    if (!selectedProduct) return
+    const availableAddons = resolveProductAddons(selectedProduct)
+    const addonsList =
+      availableAddons
+        ?.filter((ad: any) => selectedAddons[ad.id] && selectedAddons[ad.id] > 0)
+        .map((ad: any) => ({
+          addon_id: ad.id,
+          name: ad.name,
+          price: Number(ad.price) || 0,
+          quantity: selectedAddons[ad.id],
+        })) || []
+
+    setCart((prev) => [
+      ...prev,
+      {
+        product: selectedProduct,
+        quantity: Math.max(1, itemQuantity),
+        observations: itemNotes.trim(),
+        addons: addonsList,
+      },
+    ])
+
+    setSelectedProduct(null)
+  }
 
   const handleSubmitOrder = async () => {
     if (!selectedComanda || cart.length === 0) return
@@ -239,6 +310,11 @@ export default function ComandasPage() {
             product_id: item.product.id,
             quantity: item.quantity,
             notes: item.observations || null,
+            addons:
+              item.addons?.map((ad) => ({
+                addon_id: ad.addon_id,
+                quantity: ad.quantity,
+              })) || [],
           })),
         }),
       })
@@ -283,6 +359,14 @@ export default function ComandasPage() {
       return matchesCategory && matchesSearch
     })
   }, [products, selectedCategory, productSearchTerm])
+
+  useEffect(() => {
+    if (selectedProduct) {
+      setItemQuantity(1)
+      setItemNotes("")
+      setSelectedAddons({})
+    }
+  }, [selectedProduct])
 
   const handleFecharComanda = async (comanda: Comanda) => {
     try {
@@ -530,7 +614,9 @@ export default function ComandasPage() {
       </div>
 
       <Dialog open={isAddProductsOpen} onOpenChange={setIsAddProductsOpen}>
-        <DialogContent className="max-w-[1100px] w-[95vw] h-[80vh] p-0 gap-0 flex flex-col">
+        <DialogContent
+          className="!max-w-[1250px] !w-[95vw] lg:!w-[1200px] h-[90vh] max-h-[90vh] overflow-hidden p-0 gap-0 flex flex-col"
+        >
           {/* Header fixo */}
           <div className="h-14 px-6 flex items-center justify-between border-b shrink-0">
             <DialogTitle className="text-lg font-semibold">
@@ -540,11 +626,11 @@ export default function ComandasPage() {
           </div>
 
           {/* Corpo em duas colunas */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] overflow-hidden min-h-0">
             {/* Coluna esquerda - LISTA vertical de produtos (NÃO grid) */}
-            <div className="w-[320px] shrink-0 flex flex-col border-r">
-              {/* Busca */}
-              <div className="p-4 border-b shrink-0">
+            <div className="w-full lg:w-auto shrink-0 flex flex-col border-r min-w-[520px] min-h-0">
+                {/* Busca */}
+                <div className="p-4 border-b shrink-0">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -582,18 +668,18 @@ export default function ComandasPage() {
               </div>
 
               {/* LISTA de produtos - vertical, não grid */}
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="space-y-2">
-                  {filteredProducts.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      onClick={() => addToCart(product)}
-                      className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{product.name}</p>
-                        <p className="text-xs text-muted-foreground">{product.category}</p>
+          <div className="flex-1 overflow-y-auto p-4 min-h-0">
+            <div className="space-y-2">
+              {filteredProducts.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => addToCart(product)}
+                  className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{product.name}</p>
+                    <p className="text-xs text-muted-foreground">{product.category}</p>
                       </div>
                       <span className="font-semibold text-primary whitespace-nowrap">
                         R$ {product.price.toFixed(2)}
@@ -606,17 +692,15 @@ export default function ComandasPage() {
                   <div className="text-center text-muted-foreground py-8 text-sm">Nenhum produto encontrado</div>
                 )}
               </div>
-            </div>
+              </div>
 
-            {/* Coluna direita - Carrinho */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Header do carrinho */}
+            {/* Coluna direita - Carrinho/Resumo */}
+            <div className="flex-1 flex flex-col overflow-hidden min-w-[500px] bg-white min-h-0">
               <div className="h-12 px-4 flex items-center gap-2 border-b shrink-0">
                 <ShoppingCart className="h-4 w-4" />
                 <span className="font-semibold">Carrinho ({cart.length})</span>
               </div>
 
-              {/* Lista do carrinho com scroll */}
               <div className="flex-1 overflow-y-auto p-4">
                 {cart.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
@@ -630,6 +714,18 @@ export default function ComandasPage() {
                           <div className="flex-1 min-w-0">
                             <h4 className="font-medium">{item.product.name}</h4>
                             <p className="text-sm text-muted-foreground">R$ {item.product.price.toFixed(2)} cada</p>
+                            {item.addons && item.addons.length > 0 && (
+                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                {item.addons.map((ad) => (
+                                  <div key={ad.addon_id} className="flex justify-between gap-2">
+                                    <span>
+                                      {ad.quantity}x {ad.name}
+                                    </span>
+                                    <span>R$ {(ad.price * ad.quantity).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
@@ -662,7 +758,10 @@ export default function ComandasPage() {
                             </Button>
                           </div>
                           <span className="font-bold text-lg">
-                            R$ {(item.product.price * item.quantity).toFixed(2)}
+                            {(() => {
+                              const addonsTotal = item.addons.reduce((acc, ad) => acc + ad.price * ad.quantity, 0)
+                              return `R$ ${((item.product.price + addonsTotal) * item.quantity).toFixed(2)}`
+                            })()}
                           </span>
                         </div>
 
@@ -679,13 +778,10 @@ export default function ComandasPage() {
                 )}
               </div>
 
-              {/* Resumo fixo */}
               <div className="border-t p-4 shrink-0 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xl font-bold">Total:</span>
-                  <span className="text-2xl font-bold text-primary">
-                    R$ {cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2)}
-                  </span>
+                  <span className="text-2xl font-bold text-primary">R$ {cartTotal.toFixed(2)}</span>
                 </div>
                 <Button onClick={handleSubmitOrder} size="lg" className="w-full" disabled={cart.length === 0}>
                   <Send className="mr-2 h-4 w-4" />
@@ -694,6 +790,111 @@ export default function ComandasPage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de produto/adicionais */}
+      <Dialog open={!!selectedProduct} onOpenChange={(v) => !v && setSelectedProduct(null)}>
+        <DialogContent className="max-w-xl w-[95vw]">
+          {selectedProduct && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedProduct.name}</DialogTitle>
+                {selectedProduct.category && (
+                  <p className="text-sm text-muted-foreground">{selectedProduct.category}</p>
+                )}
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="space-y-1">
+                    <span className="text-lg font-semibold block">R$ {selectedProduct.price.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 bg-transparent"
+                      onClick={() => setItemQuantity(Math.max(1, itemQuantity - 1))}
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <span className="w-12 text-center font-semibold text-lg">{itemQuantity}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 bg-transparent"
+                      onClick={() => setItemQuantity(itemQuantity + 1)}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Adicionais</Label>
+                  {resolveProductAddons(selectedProduct) && resolveProductAddons(selectedProduct).length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[320px] overflow-y-auto pr-1">
+                      {resolveProductAddons(selectedProduct).map((ad: any) => {
+                        const qty = selectedAddons[ad.id] || 0
+                        return (
+                          <Card key={ad.id} className="p-3 border shadow-sm">
+                            <div className="space-y-2">
+                              <div>
+                                <p className="font-medium text-sm line-clamp-2">{ad.name}</p>
+                                <p className="text-xs text-muted-foreground">R$ {Number(ad.price).toFixed(2)}</p>
+                              </div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs text-muted-foreground">Qtd.</span>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-7 w-7 bg-transparent"
+                                    onClick={() => toggleAddonQuantity(ad.id, -1)}
+                                    disabled={qty <= 0}
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <span className="w-8 text-center text-sm font-semibold">{qty}</span>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-7 w-7 bg-transparent"
+                                    onClick={() => toggleAddonQuantity(ad.id, 1)}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum adicional disponível para este produto.</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Observação do item</Label>
+                  <Textarea
+                    placeholder="Ex: sem cebola"
+                    value={itemNotes}
+                    onChange={(e) => setItemNotes(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setSelectedProduct(null)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleAddSelectedProduct}>Adicionar</Button>
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
