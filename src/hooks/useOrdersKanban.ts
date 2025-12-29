@@ -79,9 +79,7 @@ export function useOrdersKanban(restaurantId: string) {
   useEffect(() => {
     fetchOrders()
 
-    // Auto-refresh como fallback (silencioso)
-    const interval = setInterval(() => fetchOrders({ silent: true }), 60000)
-    return () => clearInterval(interval)
+    return undefined
   }, [fetchOrders])
 
   // Realtime via Supabase

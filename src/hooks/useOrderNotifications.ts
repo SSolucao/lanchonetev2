@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import type { Order } from "@/src/domain/types"
+import { createClient } from "@/lib/supabase/client"
 
 interface NotificationSettings {
   enabled: boolean
@@ -11,7 +12,6 @@ interface NotificationSettings {
 }
 
 const STORAGE_KEY = "order-notifications-settings"
-const POLLING_INTERVAL = 10000 // 10 segundos
 
 export function useOrderNotifications(restaurantId: string) {
   const [settings, setSettings] = useState<NotificationSettings>({
@@ -134,16 +134,57 @@ export function useOrderNotifications(restaurantId: string) {
     }
   }, [restaurantId, settings.enabled, settings.lastNotifiedOrderIds, playNotificationSound])
 
-  // Polling de novos pedidos
+  // Polling de novos pedidos (apenas fallback; realtime cuida do principal)
   useEffect(() => {
     if (!settings.enabled) return
 
-    const interval = setInterval(checkNewOrders, POLLING_INTERVAL)
+    checkNewOrders()
 
-    // checkNewOrders()
-
-    return () => clearInterval(interval)
+    return undefined
   }, [settings.enabled, checkNewOrders])
+
+  // Realtime Supabase para novos pedidos
+  useEffect(() => {
+    if (!restaurantId || !settings.enabled) return
+
+    const supabase = createClient()
+
+    const channel = supabase
+      .channel(`orders-notify-${restaurantId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+          filter: `restaurant_id=eq.${restaurantId}`,
+        },
+        (payload) => {
+          const newOrder = payload.new as Order | undefined
+          if (newOrder && newOrder.status === "NOVO") {
+            // Evita duplicar aviso
+            setSettings((prev) => {
+              if (prev.lastNotifiedOrderIds.includes(newOrder.id)) return prev
+              playNotificationSound()
+              setNewOrdersCount((n) => n + 1)
+              const now = new Date()
+              lastCheckRef.current = now
+              setTimeout(() => setNewOrdersCount(0), 5000)
+              return {
+                ...prev,
+                lastNotifiedOrderIds: [...prev.lastNotifiedOrderIds, newOrder.id].slice(-50),
+                lastCheckTimestamp: now.toISOString(),
+              }
+            })
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [restaurantId, settings.enabled, playNotificationSound])
 
   // Funções de controle
   const toggleEnabled = useCallback(() => {
