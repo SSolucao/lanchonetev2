@@ -156,6 +156,24 @@ export default function CustomerPrintPage({ params }: PageProps) {
                     })}
                   </span>
                 </div>
+                {item.addons && item.addons.length > 0 && (
+                  <div className="mt-1 space-y-0.5 text-[11px] text-gray-700">
+                    {item.addons.map((ad: any) => (
+                      <div key={ad.id} className="flex justify-between pl-4">
+                        <span>
+                          {ad.quantity}x {ad.name}
+                        </span>
+                        <span>
+                          R${" "}
+                          {(Number(ad.price) * Number(ad.quantity)).toLocaleString("pt-BR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex justify-between text-[11px] text-gray-600 pl-4">
                   <span>Unitário</span>
                   <span>

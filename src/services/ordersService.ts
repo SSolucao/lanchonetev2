@@ -329,8 +329,8 @@ export async function createOrderWithItems(
 
   const order = orderData as Order
 
-  // Create all order items
-  const itemsWithOrderId = itemsInput.map((item) => ({
+  // Create all order items (strip addons before insert)
+  const itemsWithOrderId = itemsInput.map(({ addons: _addons, ...item }) => ({
     ...item,
     order_id: order.id,
   }))

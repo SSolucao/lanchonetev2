@@ -156,6 +156,24 @@ export default function KitchenPrintPage({ params }: PageProps) {
                     <div className="flex-1">
                       <p className="text-sm font-semibold leading-tight">{item.product_name}</p>
                       {(item as any).product_type === "COMBO" && <p className="text-[11px] text-gray-600">Combo</p>}
+                      {item.addons && item.addons.length > 0 && (
+                        <div className="mt-1 space-y-0.5 text-[12px] text-gray-700">
+                          {item.addons.map((ad: any) => (
+                            <div key={ad.id} className="flex justify-between pl-6">
+                              <span>
+                                {ad.quantity}x {ad.name}
+                              </span>
+                              <span>
+                                R${" "}
+                                {(Number(ad.price) * Number(ad.quantity)).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {item.notes && (
                         <p className="text-[12px] mt-1 bg-yellow-100 px-2 py-1 rounded">
                           <strong>Obs:</strong> {item.notes}

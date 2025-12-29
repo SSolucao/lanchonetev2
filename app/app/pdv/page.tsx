@@ -439,7 +439,15 @@ export default function PdvPage() {
         body: JSON.stringify({ orderInput, itemsInput }),
       })
 
+      if (!responseCreateOrder.ok) {
+        const body = await responseCreateOrder.json().catch(() => ({}))
+        throw new Error(body?.error || "Falha ao criar pedido")
+      }
+
       const { order } = await responseCreateOrder.json()
+      if (!order) {
+        throw new Error("Pedido não retornado pela API")
+      }
 
       await fetch(`/api/orders/update-stock?orderId=${order.id}`, {
         method: "POST",
@@ -904,7 +912,7 @@ export default function PdvPage() {
 
       {/* Modal de produtos por categoria */}
       <Dialog open={categoryModalOpen} onOpenChange={(v) => !v && setCategoryModalOpen(false)}>
-        <DialogContent className="max-w-5xl w-[95vw]">
+        <DialogContent className="max-w-6xl sm:max-w-6xl w-[96vw]">
           <DialogHeader>
             <DialogTitle>
               {categoryModal && categoryModal !== "Todos" ? `Produtos - ${categoryModal}` : "Todos os produtos"}
@@ -922,7 +930,7 @@ export default function PdvPage() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {filteredProducts.map((product) => (
                 <Card
                   key={product.id}

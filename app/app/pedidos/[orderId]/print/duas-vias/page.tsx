@@ -147,20 +147,38 @@ export default function DualPrintPage({ params }: PageProps) {
               <div className="border-t-2 border-black pt-4 space-y-3">
                 <h3 className="text-lg font-bold">Itens</h3>
                 <div className="space-y-3">
-                  {order.items?.map((item) => (
-                    <div key={item.id} className="border-b border-gray-200 pb-2">
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl font-bold min-w-[50px]">{item.quantity}x</span>
-                        <div className="flex-1">
-                          <p className="text-lg font-semibold leading-tight">{item.product_name}</p>
-                          {(item as any).product_type === "COMBO" && (
-                            <p className="text-xs text-gray-600 mt-1">Combo</p>
-                          )}
-                          {item.notes && (
-                            <p className="text-sm mt-2 bg-yellow-100 p-2 rounded">
-                              <strong>Obs:</strong> {item.notes}
-                            </p>
-                          )}
+                {order.items?.map((item) => (
+                  <div key={item.id} className="border-b border-gray-200 pb-2">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl font-bold min-w-[50px]">{item.quantity}x</span>
+                      <div className="flex-1">
+                        <p className="text-lg font-semibold leading-tight">{item.product_name}</p>
+                        {(item as any).product_type === "COMBO" && (
+                          <p className="text-xs text-gray-600 mt-1">Combo</p>
+                        )}
+                        {item.addons && item.addons.length > 0 && (
+                          <div className="mt-2 space-y-1 text-sm text-gray-700">
+                            {item.addons.map((ad: any) => (
+                              <div key={ad.id} className="flex justify-between pl-6">
+                                <span>
+                                  {ad.quantity}x {ad.name}
+                                </span>
+                                <span>
+                                  R${" "}
+                                  {(Number(ad.price) * Number(ad.quantity)).toLocaleString("pt-BR", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {item.notes && (
+                          <p className="text-sm mt-2 bg-yellow-100 p-2 rounded">
+                            <strong>Obs:</strong> {item.notes}
+                          </p>
+                        )}
                         </div>
                       </div>
                     </div>
@@ -237,6 +255,24 @@ export default function DualPrintPage({ params }: PageProps) {
                         })}
                       </span>
                     </div>
+                    {item.addons && item.addons.length > 0 && (
+                      <div className="mt-1 space-y-0.5 text-xs text-gray-700">
+                        {item.addons.map((ad: any) => (
+                          <div key={ad.id} className="flex justify-between pl-4">
+                            <span>
+                              {ad.quantity}x {ad.name}
+                            </span>
+                            <span>
+                              R${" "}
+                              {(Number(ad.price) * Number(ad.quantity)).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex justify-between text-xs text-gray-600 pl-4">
                       <span>Unitário</span>
                       <span>

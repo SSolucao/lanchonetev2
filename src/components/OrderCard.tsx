@@ -214,22 +214,42 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
                     <h4 className="font-semibold mb-2">Itens</h4>
                     <div className="space-y-2">
                       {order.items?.map((item) => (
-                        <div key={item.id} className="flex justify-between text-sm border-b pb-2">
-                          <div>
-                            <p>
-                              <strong>
-                                {item.quantity}x {item.product_name}
-                              </strong>
+                        <div key={item.id} className="text-sm border-b pb-2">
+                          <div className="flex justify-between gap-2">
+                            <div>
+                              <p>
+                                <strong>
+                                  {item.quantity}x {item.product_name}
+                                </strong>
+                              </p>
+                              {item.notes && <p className="text-muted-foreground text-xs">Obs: {item.notes}</p>}
+                            </div>
+                            <p className="font-semibold">
+                              R${" "}
+                              {item.total_price.toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
                             </p>
-                            {item.notes && <p className="text-muted-foreground text-xs">Obs: {item.notes}</p>}
                           </div>
-                          <p className="font-semibold">
-                            R${" "}
-                            {item.total_price.toLocaleString("pt-BR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </p>
+                          {item.addons && item.addons.length > 0 && (
+                            <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                              {item.addons.map((ad) => (
+                                <div key={ad.id} className="flex justify-between gap-2">
+                                  <span>
+                                    {ad.quantity}x {ad.name}
+                                  </span>
+                                  <span>
+                                    R${" "}
+                                    {(Number(ad.price) * Number(ad.quantity)).toLocaleString("pt-BR", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
