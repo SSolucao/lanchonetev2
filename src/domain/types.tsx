@@ -70,6 +70,17 @@ export interface Product {
   updated_at: string
 }
 
+export interface Addon {
+  id: string
+  restaurant_id: string
+  name: string
+  category: string
+  price: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface ProductComboItem {
   id: string
   restaurant_id: string
