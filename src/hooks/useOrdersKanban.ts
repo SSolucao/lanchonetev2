@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import type { OrderWithDetails } from "@/src/services/ordersService"
 import type { OrderChannel, OrderStatus } from "@/src/domain/types"
 import { createClient } from "@/lib/supabase/client"
-import { buildEscposFromOrder, getPrinterConfig, printRaw } from "@/lib/print/qzClient"
+import { buildEscposFromOrder, getPrinterConfig, printRaw } from "@/src/lib/print/qzClient"
 
 export interface KanbanFilters {
   channel?: OrderChannel | "ALL"
