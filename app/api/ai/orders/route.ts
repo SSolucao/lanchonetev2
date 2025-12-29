@@ -41,10 +41,13 @@ function pickBestPaymentMethodByName(
   return best?.method ?? null
 }
 
+type ParsedAddon = { addon_id: string; quantity: number }
+
 function parseItensPedido(itensPedido: string): Array<{
   product_id: string
   quantity: number
   notes: string | null
+  addons: ParsedAddon[]
 }> {
   if (!itensPedido || itensPedido.trim() === "") {
     return []
@@ -57,6 +60,25 @@ function parseItensPedido(itensPedido: string): Array<{
       const product_id = parts[0]?.trim()
       const quantity = Number.parseInt(parts[1]?.trim() || "1", 10)
       const notes = parts[2]?.trim() || null
+      const addonsPart = parts[3]?.trim() || ""
+
+      // addons no formato ad1|qtd,ad2|qtd; qtd opcional (default 1)
+      const addons: ParsedAddon[] = addonsPart
+        ? addonsPart
+            .split(",")
+            .map((adStr) => {
+              const [addonIdRaw, qtyRaw] = adStr.split("|")
+              const addon_id = (addonIdRaw || "").trim()
+              const qty = Number.parseInt((qtyRaw || "1").trim(), 10)
+              return addon_id
+                ? {
+                    addon_id,
+                    quantity: Number.isNaN(qty) || qty <= 0 ? 1 : qty,
+                  }
+                : null
+            })
+            .filter((a): a is ParsedAddon => Boolean(a && a.addon_id))
+        : []
 
       // Se notes for "null" ou vazio, usar null
       const finalNotes = notes && notes.toLowerCase() !== "null" ? notes : null
@@ -65,6 +87,7 @@ function parseItensPedido(itensPedido: string): Array<{
         product_id,
         quantity: isNaN(quantity) ? 1 : quantity,
         notes: finalNotes,
+        addons,
       }
     })
     .filter((item) => item.product_id) // Remove itens inválidos
@@ -150,7 +173,7 @@ export async function POST(request: Request) {
       )
     }
 
-    let parsedItems: Array<{ product_id: string; quantity: number; notes: string | null }> = []
+let parsedItems: Array<{ product_id: string; quantity: number; notes: string | null; addons?: ParsedAddon[] }> = []
 
     if (itens_pedido) {
       console.log("[v0] Parseando itens_pedido:", itens_pedido)
@@ -162,6 +185,14 @@ export async function POST(request: Request) {
         product_id: item.product_id,
         quantity: item.quantity || 1,
         notes: item.notes || null,
+        addons: Array.isArray(item.addons)
+          ? item.addons
+              .map((ad: any) => ({
+                addon_id: ad.addon_id,
+                quantity: ad.quantity && ad.quantity > 0 ? ad.quantity : 1,
+              }))
+              .filter((ad) => ad.addon_id)
+          : [],
       }))
     }
 
@@ -260,25 +291,96 @@ export async function POST(request: Request) {
       unit_price: number
       total: number
       notes: string | null
+      addons?: Array<{ name: string; quantity: number; price: number }>
     }> = []
 
-    for (const item of parsedItems) {
-      const { data: product, error: productError } = await supabase
-        .from("products")
-        .select("id, name, price")
-        .eq("id", item.product_id)
-        .single()
+    // Fetch products with allowed addons
+    const productIds = parsedItems.map((i) => i.product_id)
+    const { data: productsData, error: productsError } = await supabase
+      .from("products")
+      .select(
+        `
+        id,
+        name,
+        category,
+        price,
+        product_addons:product_addons(
+          addon:addons(id, name, price, is_active)
+        )
+      `,
+      )
+      .in("id", productIds)
 
-      if (productError || !product) {
+    if (productsError) throw productsError
+
+    // Preload addons by category as fallback when product_addons not set
+    const categoriesSet = new Set<string>()
+    productsData?.forEach((p: any) => {
+      if (p.category) categoriesSet.add(p.category)
+    })
+    let addonsByCategory: Record<string, any[]> = {}
+    if (categoriesSet.size > 0) {
+      const { data: addonsData, error: addonsError } = await supabase
+        .from("addons")
+        .select("id, name, price, is_active, category")
+        .eq("restaurant_id", restaurant.id)
+        .eq("is_active", true)
+        .in("category", Array.from(categoriesSet))
+
+      if (addonsError) throw addonsError
+      addonsByCategory = (addonsData || []).reduce((acc: Record<string, any[]>, ad: any) => {
+        if (ad.category) {
+          acc[ad.category] = acc[ad.category] || []
+          acc[ad.category].push(ad)
+        }
+        return acc
+      }, {})
+    }
+
+    const productMap = new Map(
+      (productsData || []).map((p: any) => [p.id, p]),
+    )
+
+    for (const item of parsedItems) {
+      const product = productMap.get(item.product_id)
+      if (!product) {
+        return NextResponse.json({ error: `Produto não encontrado: ${item.product_id}` }, { status: 400 })
+      }
+
+      let allowedAddons =
+        product.product_addons
+          ?.map((pa: any) => pa.addon)
+          ?.filter((a: any) => a && a.is_active) || []
+      // Fallback: se não houver vínculo explícito, usa addons ativos da mesma categoria
+      if (!allowedAddons.length && product.category && addonsByCategory[product.category]) {
+        allowedAddons = addonsByCategory[product.category]
+      }
+
+      const addonSelections =
+        item.addons
+          ?.map((sel) => {
+            const found = allowedAddons.find((a: any) => a.id === sel.addon_id)
+            if (!found) return null
+            return {
+              addon_id: sel.addon_id,
+              name: found.name,
+              price: Number(found.price) || 0,
+              quantity: sel.quantity && sel.quantity > 0 ? sel.quantity : 1,
+            }
+          })
+          .filter((a): a is { addon_id: string; name: string; price: number; quantity: number } => Boolean(a)) || []
+
+      // If there were addon_ids sent but none matched, return error
+      if (item.addons && item.addons.length > 0 && addonSelections.length !== item.addons.length) {
         return NextResponse.json(
-          {
-            error: `Produto não encontrado: ${item.product_id}`,
-          },
+          { error: `Adicionais inválidos para o produto ${product.name}` },
           { status: 400 },
         )
       }
 
-      const itemTotal = product.price * item.quantity
+      const addonsTotal = addonSelections.reduce((acc, ad) => acc + ad.price * ad.quantity, 0)
+      const baseTotal = product.price * item.quantity
+      const itemTotal = baseTotal + addonsTotal
       subtotal += itemTotal
 
       orderItems.push({
@@ -287,6 +389,7 @@ export async function POST(request: Request) {
         unit_price: product.price,
         total_price: itemTotal,
         notes: item.notes,
+        addons: addonSelections.map((ad) => ({ addon_id: ad.addon_id, quantity: ad.quantity })),
       })
 
       itemsDetails.push({
@@ -295,6 +398,7 @@ export async function POST(request: Request) {
         unit_price: product.price,
         total: itemTotal,
         notes: item.notes,
+        addons: addonSelections.map((ad) => ({ name: ad.name, quantity: ad.quantity, price: ad.price })),
       })
     }
 
@@ -348,6 +452,11 @@ export async function POST(request: Request) {
     itemsDetails.forEach((item) => {
       message += `- ${item.name} x${item.quantity} = ${formatCurrency(item.total)}`
       if (item.notes) message += ` (${item.notes})`
+      if (item.addons && item.addons.length > 0) {
+        item.addons.forEach((ad) => {
+          message += `\n  * ${ad.name} x${ad.quantity} = ${formatCurrency(ad.price * ad.quantity)}`
+        })
+      }
       message += `\n`
     })
     message += `\nSubtotal: ${formatCurrency(subtotal)}`
