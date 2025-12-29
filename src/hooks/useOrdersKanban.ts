@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import type { OrderWithDetails } from "@/src/services/ordersService"
 import type { OrderChannel, OrderStatus } from "@/src/domain/types"
 import { createClient } from "@/lib/supabase/client"
+import { buildEscposFromOrder, getPrinterConfig, printRaw } from "@/lib/print/qzClient"
 
 export interface KanbanFilters {
   channel?: OrderChannel | "ALL"
@@ -131,6 +132,24 @@ export function useOrdersKanban(restaurantId: string) {
 
       // Refresh orders after status change
       await fetchOrders()
+
+      // Auto-print if entering EM_PREPARO
+      if (newStatus === "EM_PREPARO") {
+        try {
+          const config = getPrinterConfig()
+          if (config.autoPrint && config.selectedPrinter) {
+            // Buscar dados completos do pedido para imprimir
+            const detailRes = await fetch(`/api/orders/${orderId}/print-data`)
+            if (detailRes.ok) {
+              const data = await detailRes.json()
+              const payload = buildEscposFromOrder(data.order)
+              await printRaw(config.selectedPrinter, payload, config.vias)
+            }
+          }
+        } catch (err) {
+          console.error("[v0] Auto-print falhou:", err)
+        }
+      }
       return true
     } catch (err) {
       console.error("[v0] Error updating order status:", err)
