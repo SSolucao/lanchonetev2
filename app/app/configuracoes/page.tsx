@@ -23,6 +23,8 @@ import { Pencil, Plus, Trash2 } from "lucide-react"
 import { PaymentMethodFormDialog } from "@/src/components/PaymentMethodFormDialog"
 import { DeliveryRuleFormDialog } from "@/src/components/DeliveryRuleFormDialog"
 import { StockManagementTab } from "@/src/components/StockManagementTab"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 
 export default function ConfiguracoesPage() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
@@ -36,6 +38,21 @@ export default function ConfiguracoesPage() {
   const [vias, setVias] = useState("2")
   const [isListingPrinters, setIsListingPrinters] = useState(false)
   const [isTestingPrint, setIsTestingPrint] = useState(false)
+  const [categories, setCategories] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [modalities, setModalities] = useState({
+    balcao: true,
+    retirada: true,
+    entrega: true,
+    comanda: true,
+  })
+  const [showHeader, setShowHeader] = useState(true)
+  const [showCustomer, setShowCustomer] = useState(true)
+  const [showPayment, setShowPayment] = useState(true)
+  const [showObservations, setShowObservations] = useState(true)
+  const [showValues, setShowValues] = useState(true)
+  const [width, setWidth] = useState<"32" | "48">("32")
+  const [footerText, setFooterText] = useState("")
 
   // Restaurant form
   const [name, setName] = useState("")
@@ -73,6 +90,23 @@ export default function ConfiguracoesPage() {
         setVias(parsed.vias ? String(parsed.vias) : "2")
       } catch (err) {
         console.warn("Não foi possível carregar configuração de impressora", err)
+      }
+    }
+    const savedModel = typeof window !== "undefined" ? localStorage.getItem("printerModelConfig") : null
+    if (savedModel) {
+      try {
+        const parsed = JSON.parse(savedModel)
+        if (parsed.selectedCategories) setSelectedCategories(parsed.selectedCategories)
+        if (parsed.modalities) setModalities(parsed.modalities)
+        setShowHeader(parsed.showHeader ?? true)
+        setShowCustomer(parsed.showCustomer ?? true)
+        setShowPayment(parsed.showPayment ?? true)
+        setShowObservations(parsed.showObservations ?? true)
+        setShowValues(parsed.showValues ?? true)
+        setWidth(parsed.width === "48" ? "48" : "32")
+        setFooterText(parsed.footerText || "")
+      } catch (err) {
+        console.warn("Não foi possível carregar modelo de impressão", err)
       }
     }
   }, [])
@@ -121,6 +155,32 @@ export default function ConfiguracoesPage() {
       setLoading(false)
     }
   }
+
+  // Carregar categorias para filtro de impressão
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const res = await fetch("/api/products?include_inactive=1")
+        if (res.ok) {
+          const data = await res.json()
+          const cats = Array.from(
+            new Set(
+              (data || [])
+                .map((p: any) => p.category)
+                .filter((c: string | null | undefined) => typeof c === "string" && c.trim().length > 0),
+            ),
+          ).sort()
+          setCategories(cats)
+          if (!selectedCategories.length && cats.length) {
+            setSelectedCategories(cats)
+          }
+        }
+      } catch (error) {
+        console.error("Error loading categories:", error)
+      }
+    }
+    loadCategories()
+  }, [selectedCategories.length])
 
   async function handleSaveRestaurant(e: React.FormEvent) {
     e.preventDefault()
@@ -230,6 +290,32 @@ export default function ConfiguracoesPage() {
     localStorage.setItem("printerConfig", JSON.stringify(config))
   }, [selectedPrinter, autoPrint, vias])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const model = {
+      selectedCategories,
+      modalities,
+      showHeader,
+      showCustomer,
+      showPayment,
+      showObservations,
+      showValues,
+      width,
+      footerText,
+    }
+    localStorage.setItem("printerModelConfig", JSON.stringify(model))
+  }, [
+    selectedCategories,
+    modalities,
+    showHeader,
+    showCustomer,
+    showPayment,
+    showObservations,
+    showValues,
+    width,
+    footerText,
+  ])
+
   const ensureQzConnection = async () => {
     const qz = (typeof window !== "undefined" && (window as any).qz) || null
     if (!qz) throw new Error("QZ Tray não carregado. Verifique a instalação.")
@@ -282,6 +368,98 @@ export default function ConfiguracoesPage() {
     } finally {
       setIsTestingPrint(false)
     }
+  }
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]))
+  }
+
+  const selectAllCategories = (checked: boolean) => {
+    if (checked) setSelectedCategories(categories)
+    else setSelectedCategories([])
+  }
+
+  const sampleOrder = {
+    order_number: 2193,
+    tipo_pedido: "CONSUMO NO LOCAL",
+    created_at: new Date().toISOString(),
+    items: [
+      { product_name: "Água", quantity: 1, total_price: 5, addons: [{ name: "Gás Crystal 500ml", quantity: 1 }] },
+      {
+        product_name: "Smash Burguer",
+        quantity: 1,
+        total_price: 28,
+        addons: [{ name: "Molho Mostarda e Mel", quantity: 1 }],
+      },
+      { product_name: "Batata Frita Crocante", quantity: 2, total_price: 16, addons: [] },
+    ],
+    customer: { name: "Cliente Teste", phone: "(00) 0000-0000", notes: "Quantidade de pedidos: 06" },
+    payment_method: "Dinheiro",
+    subtotal: 49,
+    total: 49,
+    troco_para: null,
+    notes: "",
+  }
+
+  const buildPreview = () => {
+    const col = width === "48" ? 48 : 32
+    const sep = "-".repeat(col)
+    const lines: string[] = []
+
+    if (showHeader) {
+      lines.push(sampleOrder.tipo_pedido)
+      lines.push(sep)
+      lines.push(new Date(sampleOrder.created_at).toLocaleString("pt-BR"))
+      lines.push("Gui-dogs Itatiba")
+      lines.push(sep)
+    }
+
+    lines.push(`Pedido ${sampleOrder.order_number}`)
+    lines.push("Itens")
+    sampleOrder.items.forEach((it) => {
+      const line = `${it.quantity}x ${it.product_name}`
+      if (showValues) {
+        const price = `R$ ${Number(it.total_price).toFixed(2)}`
+        const spaces = Math.max(1, col - line.length - price.length)
+        lines.push(line + " ".repeat(spaces) + price)
+      } else {
+        lines.push(line)
+      }
+      if (it.addons?.length) {
+        it.addons.forEach((ad: any) => lines.push(`  (${ad.quantity}) ${ad.name}`))
+      }
+      lines.push("-------")
+    })
+
+    if (showCustomer) {
+      lines.push("Cliente")
+      lines.push(`Nome: ${sampleOrder.customer.name}`)
+      lines.push(`Telefone: ${sampleOrder.customer.phone}`)
+      if (sampleOrder.customer.notes) lines.push(sampleOrder.customer.notes)
+      lines.push(sep)
+    }
+
+    if (showPayment) {
+      lines.push("Pagamento")
+      lines.push(`Forma de Pagamento: ${sampleOrder.payment_method}`)
+      lines.push(sep)
+    }
+
+    if (showValues) {
+      lines.push(`Subtotal: R$ ${sampleOrder.subtotal.toFixed(2)}`)
+      lines.push(`Total:    R$ ${sampleOrder.total.toFixed(2)}`)
+      lines.push(sep)
+    }
+
+    if (showObservations && sampleOrder.notes) {
+      lines.push("Observações")
+      lines.push(sampleOrder.notes)
+      lines.push(sep)
+    }
+
+    if (footerText.trim()) lines.push(footerText.trim())
+
+    return lines.join("\n")
   }
 
   function handleEditPaymentMethod(method: PaymentMethod) {
@@ -679,60 +857,171 @@ export default function ConfiguracoesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold">Impressão (QZ Tray)</h2>
-                <p className="text-sm text-muted-foreground">Configure a impressora e envie um teste.</p>
+                <p className="text-sm text-muted-foreground">Configure o modelo do cupom, filtros e teste.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={autoPrint}
-                    onChange={(e) => setAutoPrint(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  Imprimir automaticamente ao entrar em produção
-                </label>
-              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={autoPrint} onCheckedChange={(v) => setAutoPrint(Boolean(v))} />
+                Imprimir automaticamente ao entrar em produção
+              </label>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Impressora padrão</Label>
-                <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione ou liste impressoras" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {printers.length === 0 && (
-                      <SelectItem value="__none__">{isListingPrinters ? "Carregando..." : "Nenhuma encontrada"}</SelectItem>
-                    )}
-                    {printers.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
-                      </SelectItem>
+            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Impressora padrão</Label>
+                    <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione ou liste impressoras" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {printers.length === 0 && (
+                          <SelectItem value="__none__">{isListingPrinters ? "Carregando..." : "Nenhuma encontrada"}</SelectItem>
+                        )}
+                        {printers.map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={handleListPrinters} disabled={isListingPrinters}>
+                      {isListingPrinters ? "Listando..." : "Listar impressoras"}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Número de vias</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={vias}
+                      onChange={(e) => setVias(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+                      placeholder="Ex: 2"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Largura</Label>
+                    <Select value={width} onValueChange={(v) => setWidth(v as "32" | "48")}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="32">32 col</SelectItem>
+                        <SelectItem value="48">48 col</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold">Filtrar pedidos</h3>
+                    <p className="text-xs text-muted-foreground">Escolha quais pedidos imprimem.</p>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {[
+                      { key: "balcao", label: "Consumo no local" },
+                      { key: "retirada", label: "Retirada" },
+                      { key: "entrega", label: "Entrega" },
+                      { key: "comanda", label: "Comanda" },
+                    ].map((m) => (
+                      <label key={m.key} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={(modalities as any)[m.key]}
+                          onCheckedChange={(v) =>
+                            setModalities((prev) => ({ ...prev, [m.key]: Boolean(v) }))
+                          }
+                        />
+                        {m.label}
+                      </label>
                     ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={handleListPrinters} disabled={isListingPrinters}>
-                  {isListingPrinters ? "Listando..." : "Listar impressoras"}
-                </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-sm">Categorias de itens</h4>
+                      <label className="flex items-center gap-2 text-xs">
+                        <Checkbox
+                          checked={selectedCategories.length === categories.length && categories.length > 0}
+                          onCheckedChange={(v) => selectAllCategories(Boolean(v))}
+                        />
+                        Selecionar todos
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {categories.length === 0 && (
+                        <span className="text-xs text-muted-foreground">Nenhuma categoria carregada.</span>
+                      )}
+                      {categories.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => toggleCategory(cat)}
+                          className={`px-3 py-2 rounded-full border text-sm ${
+                            selectedCategories.includes(cat)
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-foreground"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4 space-y-3">
+                  <h3 className="font-semibold">Layout do cupom</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={showHeader} onCheckedChange={(v) => setShowHeader(Boolean(v))} />
+                      Exibir cabeçalho (nome/data)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={showCustomer} onCheckedChange={(v) => setShowCustomer(Boolean(v))} />
+                      Incluir informações do cliente
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={showPayment} onCheckedChange={(v) => setShowPayment(Boolean(v))} />
+                      Incluir pagamento
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={showObservations} onCheckedChange={(v) => setShowObservations(Boolean(v))} />
+                      Incluir observações
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={showValues} onCheckedChange={(v) => setShowValues(Boolean(v))} />
+                      Incluir valores (itens e totais)
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Rodapé</Label>
+                    <Textarea
+                      placeholder="Mensagem personalizada (opcional)"
+                      value={footerText}
+                      onChange={(e) => setFooterText(e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleListPrinters} disabled={isListingPrinters}>
+                      {isListingPrinters ? "Listando..." : "Atualizar impressoras"}
+                    </Button>
+                    <Button onClick={handleTestPrint} disabled={isTestingPrint || !selectedPrinter || selectedPrinter === "__none__"}>
+                      {isTestingPrint ? "Imprimindo..." : "Imprimir teste"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Deixe o QZ Tray aberto e autorize o site uma vez (marque “Remember this decision”).
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Número de vias</Label>
-                <Input
-                  inputMode="numeric"
-                  value={vias}
-                  onChange={(e) => setVias(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
-                  placeholder="Ex: 2"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Ação</Label>
-                <Button className="w-full" onClick={handleTestPrint} disabled={isTestingPrint}>
-                  {isTestingPrint ? "Imprimindo..." : "Imprimir teste"}
-                </Button>
-                <p className="text-xs text-muted-foreground">Certifique-se de que o QZ Tray está aberto.</p>
+              <div className="border rounded-lg p-4 bg-amber-50">
+                <h4 className="font-semibold mb-2 text-sm">Preview</h4>
+                <div className="border border-dashed rounded-md bg-white p-3">
+                  <pre className="text-xs font-mono whitespace-pre-wrap leading-5">{buildPreview()}</pre>
+                </div>
               </div>
             </div>
           </div>
