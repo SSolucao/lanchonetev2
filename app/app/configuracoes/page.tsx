@@ -29,6 +29,14 @@ export default function ConfiguracoesPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Impressão
+  const [printers, setPrinters] = useState<string[]>([])
+  const [selectedPrinter, setSelectedPrinter] = useState("")
+  const [autoPrint, setAutoPrint] = useState(false)
+  const [vias, setVias] = useState("2")
+  const [isListingPrinters, setIsListingPrinters] = useState(false)
+  const [isTestingPrint, setIsTestingPrint] = useState(false)
+
   // Restaurant form
   const [name, setName] = useState("")
   const [cepOrigem, setCepOrigem] = useState("")
@@ -56,6 +64,17 @@ export default function ConfiguracoesPage() {
 
   useEffect(() => {
     loadData()
+    const savedPrinter = typeof window !== "undefined" ? localStorage.getItem("printerConfig") : null
+    if (savedPrinter) {
+      try {
+        const parsed = JSON.parse(savedPrinter)
+        setSelectedPrinter(parsed.selectedPrinter || "")
+        setAutoPrint(Boolean(parsed.autoPrint))
+        setVias(parsed.vias ? String(parsed.vias) : "2")
+      } catch (err) {
+        console.warn("Não foi possível carregar configuração de impressora", err)
+      }
+    }
   }, [])
 
   async function loadData() {
@@ -200,6 +219,71 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  // -------- Impressão / QZ --------
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const config = {
+      selectedPrinter,
+      autoPrint,
+      vias,
+    }
+    localStorage.setItem("printerConfig", JSON.stringify(config))
+  }, [selectedPrinter, autoPrint, vias])
+
+  const ensureQzConnection = async () => {
+    const qz = (typeof window !== "undefined" && (window as any).qz) || null
+    if (!qz) throw new Error("QZ Tray não carregado. Verifique a instalação.")
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect()
+    }
+    return qz
+  }
+
+  const handleListPrinters = async () => {
+    try {
+      setIsListingPrinters(true)
+      const qz = await ensureQzConnection()
+      const list = await qz.printers.find()
+      setPrinters(list || [])
+    } catch (err: any) {
+      alert(err?.message || "Erro ao listar impressoras. Certifique-se de que o QZ Tray está aberto.")
+    } finally {
+      setIsListingPrinters(false)
+    }
+  }
+
+  const handleTestPrint = async () => {
+    if (!selectedPrinter || selectedPrinter === "__none__") {
+      alert("Selecione uma impressora antes de testar.")
+      return
+    }
+    try {
+      setIsTestingPrint(true)
+      const qz = await ensureQzConnection()
+      const cfg = qz.configs.create(selectedPrinter)
+      const payload = [
+        "\x1B\x40",
+        "TESTE QZ OK\n",
+        "----------------\n",
+        "1x PRODUTO\n",
+        "  + Adicional\n",
+        "\n",
+        "\x1B\x64\x03",
+        "\x1D\x56\x00",
+      ]
+      const viasNumber = Math.max(1, Number(vias) || 1)
+      for (let i = 0; i < viasNumber; i += 1) {
+        await qz.print(cfg, payload)
+      }
+      alert("Teste enviado para a impressora.")
+    } catch (err: any) {
+      console.error("Erro ao imprimir teste", err)
+      alert(err?.message || "Erro ao imprimir teste.")
+    } finally {
+      setIsTestingPrint(false)
+    }
+  }
+
   function handleEditPaymentMethod(method: PaymentMethod) {
     setEditingPaymentMethod(method)
     setPaymentDialogOpen(true)
@@ -303,6 +387,7 @@ export default function ConfiguracoesPage() {
           <TabsTrigger value="payment">Formas de pagamento</TabsTrigger>
           <TabsTrigger value="delivery">Regras de entrega</TabsTrigger>
           <TabsTrigger value="stock">Estoque</TabsTrigger>
+          <TabsTrigger value="printer">Impressão</TabsTrigger>
         </TabsList>
 
         <TabsContent value="restaurant">
@@ -587,6 +672,70 @@ export default function ConfiguracoesPage() {
 
         <TabsContent value="stock">
           <StockManagementTab />
+        </TabsContent>
+
+        <TabsContent value="printer">
+          <div className="border rounded-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Impressão (QZ Tray)</h2>
+                <p className="text-sm text-muted-foreground">Configure a impressora e envie um teste.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={autoPrint}
+                    onChange={(e) => setAutoPrint(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Imprimir automaticamente ao entrar em produção
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Impressora padrão</Label>
+                <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione ou liste impressoras" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {printers.length === 0 && (
+                      <SelectItem value="__none__">{isListingPrinters ? "Carregando..." : "Nenhuma encontrada"}</SelectItem>
+                    )}
+                    {printers.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={handleListPrinters} disabled={isListingPrinters}>
+                  {isListingPrinters ? "Listando..." : "Listar impressoras"}
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Número de vias</Label>
+                <Input
+                  inputMode="numeric"
+                  value={vias}
+                  onChange={(e) => setVias(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+                  placeholder="Ex: 2"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Ação</Label>
+                <Button className="w-full" onClick={handleTestPrint} disabled={isTestingPrint}>
+                  {isTestingPrint ? "Imprimindo..." : "Imprimir teste"}
+                </Button>
+                <p className="text-xs text-muted-foreground">Certifique-se de que o QZ Tray está aberto.</p>
+              </div>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 
