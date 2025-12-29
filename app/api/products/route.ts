@@ -12,14 +12,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
     const includeInactive = ["1", "true", "yes"].includes((searchParams.get("include_inactive") || "").toLowerCase())
+    const includeAddons = ["1", "true", "yes"].includes((searchParams.get("include_addons") || "").toLowerCase())
 
     const filters =
       type || includeInactive
         ? {
             ...(type ? { type: type as "UNIT" | "COMBO" } : {}),
             ...(includeInactive ? { include_inactive: true } : { is_active: true }),
+            ...(includeAddons ? { include_addons: true } : {}),
           }
-        : undefined
+        : includeAddons
+          ? { include_addons: true, is_active: true }
+          : undefined
     const products = await listProducts(restaurant.id, filters)
 
     return NextResponse.json(products)

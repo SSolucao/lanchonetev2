@@ -3,10 +3,19 @@
 import { useState, useCallback } from "react"
 import type { Product, Customer, TipoPedido } from "@/src/domain/types"
 
+export interface AddonSelection {
+  addon_id: string
+  name: string
+  price: number
+  quantity: number
+}
+
 export interface DraftOrderItem {
+  id: string
   product: Product
   quantity: number
   notes: string
+  addons: AddonSelection[]
 }
 
 export interface DraftOrder {
@@ -32,7 +41,8 @@ export function usePdvOrder() {
 
   const addItem = useCallback((product: Product) => {
     setDraft((prev) => {
-      const existingIndex = prev.items.findIndex((item) => item.product.id === product.id)
+      // Só agrega se não houver addons/observação; senão, criar item separado
+      const existingIndex = prev.items.findIndex((item) => item.product.id === product.id && item.addons.length === 0)
 
       if (existingIndex >= 0) {
         const newItems = [...prev.items]
@@ -45,30 +55,52 @@ export function usePdvOrder() {
 
       return {
         ...prev,
-        items: [...prev.items, { product, quantity: 1, notes: "" }],
+        items: [
+          ...prev.items,
+          { id: crypto.randomUUID(), product, quantity: 1, notes: "", addons: [] },
+        ],
       }
     })
   }, [])
 
-  const removeItem = useCallback((productId: string) => {
+  const addItemWithAddons = useCallback(
+    (product: Product, quantity: number, notes: string, addons: AddonSelection[]) => {
+      setDraft((prev) => ({
+        ...prev,
+        items: [
+          ...prev.items,
+          {
+            id: crypto.randomUUID(),
+            product,
+            quantity: Math.max(1, quantity),
+            notes,
+            addons,
+          },
+        ],
+      }))
+    },
+    [],
+  )
+
+  const removeItem = useCallback((itemId: string) => {
     setDraft((prev) => ({
       ...prev,
-      items: prev.items.filter((item) => item.product.id !== productId),
+      items: prev.items.filter((item) => item.id !== itemId),
     }))
   }, [])
 
-  const updateItemQuantity = useCallback((productId: string, quantity: number) => {
+  const updateItemQuantity = useCallback((itemId: string, quantity: number) => {
     if (quantity <= 0) return
 
     setDraft((prev) => {
-      const newItems = prev.items.map((item) => (item.product.id === productId ? { ...item, quantity } : item))
+      const newItems = prev.items.map((item) => (item.id === itemId ? { ...item, quantity } : item))
       return { ...prev, items: newItems }
     })
   }, [])
 
-  const updateItemNotes = useCallback((productId: string, notes: string) => {
+  const updateItemNotes = useCallback((itemId: string, notes: string) => {
     setDraft((prev) => {
-      const newItems = prev.items.map((item) => (item.product.id === productId ? { ...item, notes } : item))
+      const newItems = prev.items.map((item) => (item.id === itemId ? { ...item, notes } : item))
       return { ...prev, items: newItems }
     })
   }, [])
@@ -108,13 +140,17 @@ export function usePdvOrder() {
     setDraft(initialDraftOrder)
   }, [])
 
-  const subtotal = draft.items.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+  const subtotal = draft.items.reduce((sum, item) => {
+    const addonsTotal = item.addons.reduce((a, ad) => a + ad.price * ad.quantity, 0)
+    return sum + (item.product.price + addonsTotal) * item.quantity
+  }, 0)
 
   const total = subtotal + draft.deliveryFee
 
   return {
     draft,
     addItem,
+    addItemWithAddons,
     removeItem,
     updateItemQuantity,
     updateItemNotes,

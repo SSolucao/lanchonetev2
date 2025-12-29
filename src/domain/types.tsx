@@ -68,6 +68,7 @@ export interface Product {
   low_stock_threshold: number
   created_at: string
   updated_at: string
+  addons?: Addon[] // Allowed addons for this product (when included)
 }
 
 export interface Addon {
@@ -291,6 +292,10 @@ export interface CreateOrderItemInput {
   unit_price: number
   total_price: number
   notes?: string
+  addons?: Array<{
+    addon_id: string
+    quantity?: number
+  }>
 }
 
 export interface CreateStockItemInput {

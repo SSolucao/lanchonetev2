@@ -36,6 +36,13 @@ export interface OrderWithDetails extends Order {
     unit_price: number
     total_price: number
     notes: string | null
+    addons?: Array<{
+      id: string
+      addon_id: string
+      name: string
+      price: number
+      quantity: number
+    }>
   }>
   payment_method?: {
     id: string
@@ -145,7 +152,8 @@ export async function listOrdersForKanban(
           unit_price,
           total_price,
           notes,
-          product:products(name)
+          product:products(name),
+          addons:order_item_addons(id, addon_id, name, price, quantity)
         `,
         )
         .eq("order_id", order.id)
@@ -159,6 +167,14 @@ export async function listOrdersForKanban(
           unit_price: item.unit_price,
           total_price: item.total_price,
           notes: item.notes,
+          addons:
+            item.addons?.map((ad: any) => ({
+              id: ad.id,
+              addon_id: ad.addon_id,
+              name: ad.name,
+              price: ad.price,
+              quantity: ad.quantity,
+            })) || [],
         })) || []
 
       let comanda = null
@@ -327,9 +343,113 @@ export async function createOrderWithItems(
     throw itemsError
   }
 
+  const insertedItems = itemsData as OrderItem[]
+
+  // Addons handling: collect all addon selections
+  const addonSelections: Array<{ addon_id: string; quantity: number; order_item_index: number }> = []
+  itemsInput.forEach((item, index) => {
+    if (item.addons && item.addons.length > 0) {
+      item.addons.forEach((a) => {
+        if (a.addon_id) {
+          addonSelections.push({
+            addon_id: a.addon_id,
+            quantity: a.quantity && a.quantity > 0 ? a.quantity : 1,
+            order_item_index: index,
+          })
+        }
+      })
+    }
+  })
+
+  let addonsTotalByItem: Record<number, number> = {}
+
+  if (addonSelections.length > 0) {
+    // Fetch addon details
+    const { data: addonRows, error: addonError } = await supabase
+      .from("addons")
+      .select("id, name, price, is_active")
+      .in(
+        "id",
+        Array.from(new Set(addonSelections.map((a) => a.addon_id))),
+      )
+
+    if (addonError) throw addonError
+
+    const addonMap = new Map<string, { name: string; price: number; is_active: boolean }>()
+    ;(addonRows || []).forEach((row: any) => {
+      addonMap.set(row.id, { name: row.name, price: Number(row.price) || 0, is_active: row.is_active })
+    })
+
+    const orderItemAddonsToInsert: Array<{
+      order_item_id: string
+      addon_id: string
+      name: string
+      price: number
+      quantity: number
+    }> = []
+
+    addonSelections.forEach((sel) => {
+      const addon = addonMap.get(sel.addon_id)
+      if (!addon) return
+      const itemRow = insertedItems[sel.order_item_index]
+      if (!itemRow) return
+
+      const price = addon.price
+      const qty = sel.quantity
+      orderItemAddonsToInsert.push({
+        order_item_id: itemRow.id,
+        addon_id: sel.addon_id,
+        name: addon.name,
+        price,
+        quantity: qty,
+      })
+
+      addonsTotalByItem[sel.order_item_index] = (addonsTotalByItem[sel.order_item_index] || 0) + price * qty
+    })
+
+    if (orderItemAddonsToInsert.length > 0) {
+      const { error: oiAddonError } = await supabase.from("order_item_addons").insert(orderItemAddonsToInsert)
+      if (oiAddonError) throw oiAddonError
+    }
+  }
+
+  // Recalculate item totals to include addons and update order subtotal/total
+  const itemsWithTotals = insertedItems.map((item, index) => {
+    const addonsTotal = addonsTotalByItem[index] || 0
+    const baseTotal = (item.unit_price || 0) * (item.quantity || 0)
+    const total_price = baseTotal + addonsTotal
+    return { ...item, total_price }
+  })
+
+  // Persist updated item totals
+  if (addonsTotalByItem && Object.keys(addonsTotalByItem).length > 0) {
+    await Promise.all(
+      itemsWithTotals.map((item) =>
+        supabase
+          .from("order_items")
+          .update({ total_price: item.total_price })
+          .eq("id", item.id),
+      ),
+    )
+  }
+
+  const subtotal = itemsWithTotals.reduce((acc, item) => acc + (Number(item.total_price) || 0), 0)
+  const deliveryFee = orderInput.delivery_fee || 0
+  const total = subtotal + deliveryFee
+
+  // Update order totals
+  const { data: updatedOrderData, error: updateOrderError } = await supabase
+    .from("orders")
+    .update({ subtotal, total })
+    .eq("id", order.id)
+    .select()
+    .single()
+
+  if (updateOrderError) throw updateOrderError
+
   return {
-    order,
-    items: itemsData as OrderItem[],
+    order: updatedOrderData as Order,
+    items: itemsWithTotals as OrderItem[],
   }
 }
 
@@ -375,7 +495,8 @@ export async function getOrderForPrint(orderId: string): Promise<OrderForPrint |
       unit_price,
       total_price,
       notes,
-      product:products(id, name, type)
+      product:products(id, name, type),
+      addons:order_item_addons(id, addon_id, name, price, quantity)
     `,
     )
     .eq("order_id", orderId)
@@ -404,6 +525,14 @@ export async function getOrderForPrint(orderId: string): Promise<OrderForPrint |
       unit_price: item.unit_price,
       total_price: item.total_price,
       notes: item.notes,
+      addons:
+        item.addons?.map((ad: any) => ({
+          id: ad.id,
+          addon_id: ad.addon_id,
+          name: ad.name,
+          price: ad.price,
+          quantity: ad.quantity,
+        })) || [],
     })) || []
 
   return {

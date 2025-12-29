@@ -16,11 +16,24 @@ export interface ProductFilters {
   category?: string
   is_active?: boolean
   include_inactive?: boolean
+  include_addons?: boolean
 }
 
 export async function listProducts(restaurantId: string, filters?: ProductFilters): Promise<Product[]> {
   const supabase = await createClient()
-  let query = supabase.from("products").select("*").eq("restaurant_id", restaurantId)
+  let query = supabase
+    .from("products")
+    .select(
+      filters?.include_addons
+        ? `
+        *,
+        product_addons:product_addons(
+          addon:addons(id, name, category, price, is_active)
+        )
+      `
+        : "*",
+    )
+    .eq("restaurant_id", restaurantId)
 
   if (!filters?.include_inactive) {
     const activeFilter = filters?.is_active ?? true
@@ -37,6 +50,17 @@ export async function listProducts(restaurantId: string, filters?: ProductFilter
   const { data, error } = await query.order("name")
 
   if (error) throw error
+
+  if (filters?.include_addons) {
+    return (data as any[]).map((p) => ({
+      ...p,
+      addons:
+        p.product_addons
+          ?.map((pa: any) => pa.addon)
+          ?.filter((a: any) => !!a) || [],
+    }))
+  }
+
   return data as Product[]
 }
 
