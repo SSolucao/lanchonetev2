@@ -45,9 +45,9 @@ function getAvailableTransitions(currentStatus: OrderStatus, isDelivery: boolean
 }
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
-  NOVO: "Novo",
-  EM_PREPARO: "Em preparo",
-  SAIU_PARA_ENTREGA: "Saiu para entrega",
+  NOVO: "Em análise",
+  EM_PREPARO: "Em produção",
+  SAIU_PARA_ENTREGA: "Pronto para entrega",
   FINALIZADO: "Finalizado",
   CANCELADO: "Cancelado",
 }
@@ -149,153 +149,170 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
           )}
         </div>
 
-        <div className="text-sm text-muted-foreground">
+        <div
+          className="text-sm text-muted-foreground"
+          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+        >
           {itemsSummary}
           {hasMoreItems && "..."}
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t">
+        <div className="flex items-center justify-between pt-2 border-t gap-2 flex-wrap">
           <span className="font-semibold text-lg">
             R$ {order.total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
 
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                Ver detalhes
+          <div className="flex items-center gap-2">
+            {order.status === "SAIU_PARA_ENTREGA" && (
+              <Button
+                size="sm"
+                variant="default"
+                className="min-w-[96px]"
+                onClick={() => handleStatusChange("FINALIZADO")}
+                disabled={isChangingStatus}
+              >
+                Finalizar
               </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Pedido #{order.order_number}</DialogTitle>
-              </DialogHeader>
+            )}
 
-              <div className="space-y-4 mt-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Informações</h4>
-                  <div className="space-y-1 text-sm">
-                    <p>
-                      <strong>Tipo:</strong> {tipoPedidoLabel()}
-                    </p>
-                    <p>
-                      <strong>Cliente:</strong> {customerName}
-                    </p>
-                    {order.customer?.phone && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="min-w-[108px]">
+                  Ver detalhes
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Pedido #{order.order_number}</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <h4 className="font-semibold mb-2">Informações</h4>
+                    <div className="space-y-1 text-sm">
                       <p>
-                        <strong>Telefone:</strong> {order.customer.phone}
+                        <strong>Tipo:</strong> {tipoPedidoLabel()}
                       </p>
-                    )}
-                    <p>
-                      <strong>Status:</strong> {STATUS_LABELS[order.status]}
-                    </p>
-                    <p>
-                      <strong>Forma de pagamento:</strong> {order.payment_method?.name || "Não informado"}
-                    </p>
+                      <p>
+                        <strong>Cliente:</strong> {customerName}
+                      </p>
+                      {order.customer?.phone && (
+                        <p>
+                          <strong>Telefone:</strong> {order.customer.phone}
+                        </p>
+                      )}
+                      <p>
+                        <strong>Status:</strong> {STATUS_LABELS[order.status]}
+                      </p>
+                      <p>
+                        <strong>Forma de pagamento:</strong> {order.payment_method?.name || "Não informado"}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <h4 className="font-semibold mb-2">Itens</h4>
-                  <div className="space-y-2">
-                    {order.items?.map((item) => (
-                      <div key={item.id} className="flex justify-between text-sm border-b pb-2">
-                        <div>
-                          <p>
-                            <strong>
-                              {item.quantity}x {item.product_name}
-                            </strong>
+                  <div>
+                    <h4 className="font-semibold mb-2">Itens</h4>
+                    <div className="space-y-2">
+                      {order.items?.map((item) => (
+                        <div key={item.id} className="flex justify-between text-sm border-b pb-2">
+                          <div>
+                            <p>
+                              <strong>
+                                {item.quantity}x {item.product_name}
+                              </strong>
+                            </p>
+                            {item.notes && <p className="text-muted-foreground text-xs">Obs: {item.notes}</p>}
+                          </div>
+                          <p className="font-semibold">
+                            R${" "}
+                            {item.total_price.toLocaleString("pt-BR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
                           </p>
-                          {item.notes && <p className="text-muted-foreground text-xs">Obs: {item.notes}</p>}
                         </div>
-                        <p className="font-semibold">
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-3">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span>Subtotal:</span>
+                      <span>
+                        R${" "}
+                        {order.subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {order.delivery_fee > 0 && (
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>Taxa de entrega:</span>
+                        <span>
                           R${" "}
-                          {item.total_price.toLocaleString("pt-BR", {
+                          {order.delivery_fee.toLocaleString("pt-BR", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })}
-                        </p>
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="border-t pt-3">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Subtotal:</span>
-                    <span>
-                      R${" "}
-                      {order.subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  {order.delivery_fee > 0 && (
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Taxa de entrega:</span>
+                    )}
+                    <div className="flex justify-between font-bold text-lg border-t pt-2">
+                      <span>Total:</span>
                       <span>
-                        R${" "}
-                        {order.delivery_fee.toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        R$ {order.total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
+                  </div>
+
+                  {order.notes && (
+                    <div>
+                      <h4 className="font-semibold mb-1">Observações do pedido</h4>
+                      <p className="text-sm text-muted-foreground">{order.notes}</p>
+                    </div>
                   )}
-                  <div className="flex justify-between font-bold text-lg border-t pt-2">
-                    <span>Total:</span>
-                    <span>
-                      R$ {order.total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+
+                  <div className="border-t pt-4 space-y-2">
+                    <h4 className="font-semibold mb-2">Impressão</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 bg-transparent"
+                        onClick={() => window.open(`/app/pedidos/${order.id}/print/cozinha`, "_blank")}
+                      >
+                        Imprimir cozinha
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 bg-transparent"
+                        onClick={() => window.open(`/app/pedidos/${order.id}/print/cliente`, "_blank")}
+                      >
+                        Imprimir cliente
+                      </Button>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1 mt-2">
+                      {order.kitchen_printed_at && (
+                        <p>
+                          Cozinha impresso em:{" "}
+                          {new Date(order.kitchen_printed_at).toLocaleString("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
+                        </p>
+                      )}
+                      {order.customer_printed_at && (
+                        <p>
+                          Cliente impresso em:{" "}
+                          {new Date(order.customer_printed_at).toLocaleString("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {order.notes && (
-                  <div>
-                    <h4 className="font-semibold mb-1">Observações do pedido</h4>
-                    <p className="text-sm text-muted-foreground">{order.notes}</p>
-                  </div>
-                )}
-
-                <div className="border-t pt-4 space-y-2">
-                  <h4 className="font-semibold mb-2">Impressão</h4>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1 bg-transparent"
-                      onClick={() => window.open(`/app/pedidos/${order.id}/print/cozinha`, "_blank")}
-                    >
-                      Imprimir cozinha
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1 bg-transparent"
-                      onClick={() => window.open(`/app/pedidos/${order.id}/print/cliente`, "_blank")}
-                    >
-                      Imprimir cliente
-                    </Button>
-                  </div>
-                  <div className="text-xs text-muted-foreground space-y-1 mt-2">
-                    {order.kitchen_printed_at && (
-                      <p>
-                        Cozinha impresso em:{" "}
-                        {new Date(order.kitchen_printed_at).toLocaleString("pt-BR", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    )}
-                    {order.customer_printed_at && (
-                      <p>
-                        Cliente impresso em:{" "}
-                        {new Date(order.customer_printed_at).toLocaleString("pt-BR", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </CardContent>
     </Card>
