@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import type { OrderWithDetails } from "@/src/services/ordersService"
 import type { OrderChannel, OrderStatus } from "@/src/domain/types"
+import { createClient } from "@/lib/supabase/client"
 
 export interface KanbanFilters {
   channel?: OrderChannel | "ALL"
@@ -18,10 +19,14 @@ export function useOrdersKanban(restaurantId: string) {
     period: "today",
   })
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
+  const fetchOrders = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent
+      try {
+        if (!silent) {
+          setIsLoading(true)
+        }
+        setError(null)
 
       const queryParams = new URLSearchParams()
 
@@ -47,22 +52,68 @@ export function useOrdersKanban(restaurantId: string) {
       const data = await response.json()
       console.log("[v0] Kanban API returned orders:", data.orders?.length || 0)
       console.log("[v0] Orders data:", data.orders)
-      setOrders(data.orders || [])
+        if (!silent) {
+          setOrders(data.orders || [])
+        } else {
+          setOrders((prev) => {
+            if (!prev || prev.length === 0) return data.orders || []
+            if (!data.orders) return prev
+            const map = new Map<string, OrderWithDetails>()
+            prev.forEach((o) => map.set(o.id, o))
+            data.orders.forEach((o: OrderWithDetails) => map.set(o.id, o))
+            return Array.from(map.values())
+          })
+        }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")
       console.error("[v0] Error fetching orders for kanban:", err)
     } finally {
-      setIsLoading(false)
+        if (!silent) {
+          setIsLoading(false)
+        }
     }
-  }, [filters])
+    },
+    [filters],
+  )
 
   useEffect(() => {
     fetchOrders()
 
-    // Optional: Auto-refresh every 30 seconds
-    const interval = setInterval(fetchOrders, 30000)
+    // Auto-refresh como fallback (silencioso)
+    const interval = setInterval(() => fetchOrders({ silent: true }), 60000)
     return () => clearInterval(interval)
   }, [fetchOrders])
+
+  // Realtime via Supabase
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null)
+
+  useEffect(() => {
+    if (!restaurantId) return
+    if (!supabaseRef.current) {
+      supabaseRef.current = createClient()
+    }
+    const supabase = supabaseRef.current
+
+    const channel = supabase
+      .channel(`orders-kanban-${restaurantId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+          filter: `restaurant_id=eq.${restaurantId}`,
+        },
+        () => {
+          fetchOrders({ silent: true })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [restaurantId, fetchOrders])
 
   const updateFilters = (newFilters: Partial<KanbanFilters>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }))
