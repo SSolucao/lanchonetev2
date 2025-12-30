@@ -80,25 +80,22 @@ export const printCupom = async (printer: string, lines: string[], vias: number 
 // Constrói um payload ESC/POS simples com itens, adicionais e observações
 export const buildEscposFromOrder = (order: any): string[] => {
   const lines: string[] = []
-  lines.push("\x1B\x40") // init
-  lines.push(`PEDIDO #${order?.order_number || ""}\n`)
-  if (order?.tipo_pedido) lines.push(`${order.tipo_pedido}\n`)
-  lines.push("--------------------------\n")
+  lines.push(`PEDIDO #${order?.order_number || ""}`)
+  if (order?.tipo_pedido) lines.push(`${order.tipo_pedido}`)
+  lines.push("--------------------------")
 
   order?.items?.forEach((it: any) => {
-    lines.push(`${it.quantity}x ${it.product_name}\n`)
+    lines.push(`${it.quantity}x ${it.product_name}`)
     if (it.addons && it.addons.length > 0) {
       it.addons.forEach((ad: any) => {
-        lines.push(`  + ${ad.quantity}x ${ad.name}\n`)
+        lines.push(`  + ${ad.quantity}x ${ad.name}`)
       })
     }
     if (it.notes) {
-      lines.push(`  Obs: ${it.notes}\n`)
+      lines.push(`  Obs: ${it.notes}`)
     }
-    lines.push("\n")
+    lines.push("") // linha em branco entre itens
   })
 
-  lines.push("\x1B\x64\x03") // feed 3
-  lines.push("\x1D\x56\x00") // cut
   return lines
 }

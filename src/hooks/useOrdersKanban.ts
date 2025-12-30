@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import type { OrderWithDetails } from "@/src/services/ordersService"
 import type { OrderChannel, OrderStatus } from "@/src/domain/types"
 import { createClient } from "@/lib/supabase/client"
-import { buildEscposFromOrder, getPrinterConfig, printRaw } from "@/src/lib/print/qzClient"
+import { buildEscposFromOrder, getPrinterConfig, printCupom } from "@/src/lib/print/qzClient"
 
 export interface KanbanFilters {
   channel?: OrderChannel | "ALL"
@@ -143,7 +143,7 @@ export function useOrdersKanban(restaurantId: string) {
             if (detailRes.ok) {
               const data = await detailRes.json()
               const payload = buildEscposFromOrder(data.order)
-              await printRaw(config.selectedPrinter, payload, config.vias)
+              await printCupom(config.selectedPrinter, payload, config.vias)
             }
           }
         } catch (err) {
