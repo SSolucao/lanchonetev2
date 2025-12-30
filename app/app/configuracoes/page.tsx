@@ -25,6 +25,7 @@ import { DeliveryRuleFormDialog } from "@/src/components/DeliveryRuleFormDialog"
 import { StockManagementTab } from "@/src/components/StockManagementTab"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import { printCupom } from "@/src/lib/print/qzClient"
 
 export default function ConfiguracoesPage() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
@@ -345,22 +346,17 @@ export default function ConfiguracoesPage() {
     }
     try {
       setIsTestingPrint(true)
-      const qz = await ensureQzConnection()
-      const cfg = qz.configs.create(selectedPrinter)
-      const payload = [
-        "\x1B\x40",
-        "TESTE QZ OK\n",
-        "----------------\n",
-        "1x PRODUTO\n",
-        "  + Adicional\n",
-        "\n",
-        "\x1B\x64\x03",
-        "\x1D\x56\x00",
-      ]
       const viasNumber = Math.max(1, Number(vias) || 1)
-      for (let i = 0; i < viasNumber; i += 1) {
-        await qz.print(cfg, payload)
-      }
+      const linhas = [
+        "SUPERSOLUCAO",
+        "-----------------------------",
+        "1x X-BURGER",
+        "  + Bacon",
+        "  + Queijo",
+        "",
+        "Obrigado!",
+      ]
+      await printCupom(selectedPrinter, linhas, viasNumber)
       alert("Teste enviado para a impressora.")
     } catch (err: any) {
       console.error("Erro ao imprimir teste", err)
