@@ -48,6 +48,40 @@ export const printRaw = async (printer: string, data: string[], vias: number = 1
   }
 }
 
+// Normaliza linhas para CRLF e aplica comandos de corte com fallback
+export const printCupom = async (printer: string, lines: string[], vias: number = 1) => {
+  const qz = await ensureQzConnection()
+  const cfg = qz.configs.create(printer)
+  const copies = Math.max(1, vias)
+
+  // Converte \n em \r\n, mas não duplica se já existir \r\n
+  const normalize = (text: string) => text.replace(/\r?\n/g, "\r\n")
+
+  // Monta payload ESC/POS
+  const base: string[] = []
+  base.push("\x1B\x40") // init
+  base.push("\x1B\x61\x00") // alinhar à esquerda
+  lines.forEach((ln) => base.push(normalize(ln)))
+  // feed antes do corte
+  base.push("\r\n\r\n\r\n")
+  base.push("\x1B\x64\x03") // feed 3 linhas
+
+  // Comandos de corte (tentativa em cascata)
+  const cutCommands = ["\x1D\x56\x00", "\x1D\x56\x01", "\x1B\x69", "\x1B\x6D"]
+  let appliedCut = ""
+  for (const cmd of cutCommands) {
+    appliedCut = cmd
+    base.push(cmd)
+    break
+  }
+
+  console.log("[printCupom] Impressora:", printer, "Vias:", copies, "CutCmd:", appliedCut)
+
+  for (let i = 0; i < copies; i += 1) {
+    await qz.print(cfg, base)
+  }
+}
+
 // Constrói um payload ESC/POS simples com itens, adicionais e observações
 export const buildEscposFromOrder = (order: any): string[] => {
   const lines: string[] = []
