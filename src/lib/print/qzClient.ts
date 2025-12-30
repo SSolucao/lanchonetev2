@@ -64,18 +64,13 @@ export const printCupom = async (printer: string, lines: string[], vias: number 
   lines.forEach((ln) => base.push(`${normalize(ln)}\r\n`)) // garante CRLF ao final de cada linha
   // feed antes do corte
   base.push("\r\n\r\n\r\n")
-  base.push("\x1B\x64\x05") // feed 5 linhas para garantir distância do corte
+  base.push("\x1B\x64\x06") // feed 6 linhas para garantir distância do corte
 
-  // Comandos de corte (tentativa em cascata)
-  const cutCommands = ["\x1D\x56\x00", "\x1D\x56\x01", "\x1B\x69", "\x1B\x6D"]
-  let appliedCut = ""
-  // envia todos os comandos de corte como fallback em sequência
-  cutCommands.forEach((cmd) => {
-    base.push(cmd)
-    if (!appliedCut) appliedCut = cmd
-  })
+  // Comando de corte confirmado na MP-4200: GS V 1 (partial)
+  const cutCmd = "\x1D\x56\x01"
+  base.push(cutCmd)
 
-  console.log("[printCupom] Impressora:", printer, "Vias:", copies, "CutCmd:", appliedCut)
+  console.log("[printCupom] Impressora:", printer, "Vias:", copies, "CutCmd:", cutCmd)
 
   for (let i = 0; i < copies; i += 1) {
     await qz.print(cfg, base)
