@@ -61,19 +61,19 @@ export const printCupom = async (printer: string, lines: string[], vias: number 
   const base: string[] = []
   base.push("\x1B\x40") // init
   base.push("\x1B\x61\x00") // alinhar à esquerda
-  lines.forEach((ln) => base.push(normalize(ln)))
+  lines.forEach((ln) => base.push(`${normalize(ln)}\r\n`)) // garante CRLF ao final de cada linha
   // feed antes do corte
   base.push("\r\n\r\n\r\n")
-  base.push("\x1B\x64\x03") // feed 3 linhas
+  base.push("\x1B\x64\x05") // feed 5 linhas para garantir distância do corte
 
   // Comandos de corte (tentativa em cascata)
   const cutCommands = ["\x1D\x56\x00", "\x1D\x56\x01", "\x1B\x69", "\x1B\x6D"]
   let appliedCut = ""
-  for (const cmd of cutCommands) {
-    appliedCut = cmd
+  // envia todos os comandos de corte como fallback em sequência
+  cutCommands.forEach((cmd) => {
     base.push(cmd)
-    break
-  }
+    if (!appliedCut) appliedCut = cmd
+  })
 
   console.log("[printCupom] Impressora:", printer, "Vias:", copies, "CutCmd:", appliedCut)
 
