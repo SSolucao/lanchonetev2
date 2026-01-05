@@ -49,6 +49,53 @@ export async function GET() {
       .select("combo_id, product_id, quantity")
       .eq("restaurant_id", restaurant.id)
 
+    // Get active addons
+    const { data: addons } = await supabase
+      .from("addons")
+      .select("id, name, price, category, is_active")
+      .eq("restaurant_id", restaurant.id)
+      .eq("is_active", true)
+
+    const addonIds = (addons || []).map((a) => a.id)
+
+    // Get addon categories (multi-category support)
+    let addonCategories: { addon_id: string; category: string }[] = []
+    if (addonIds.length > 0) {
+      const { data } = await supabase
+        .from("addon_categories")
+        .select("addon_id, category")
+        .in("addon_id", addonIds)
+      addonCategories = (data || []) as any[]
+    }
+
+    // Get product-addon explicit bindings
+    let productAddons: { product_id: string; addon_id: string }[] = []
+    if (addonIds.length > 0) {
+      const { data } = await supabase
+        .from("product_addons")
+        .select("product_id, addon_id")
+        .eq("restaurant_id", restaurant.id)
+      productAddons = (data || []) as any[]
+    }
+
+    const addonCategoriesMap = addonCategories.reduce<Record<string, string[]>>((acc, row) => {
+      if (!row?.addon_id || !row?.category) return acc
+      acc[row.addon_id] = acc[row.addon_id] || []
+      if (!acc[row.addon_id].includes(row.category)) {
+        acc[row.addon_id].push(row.category)
+      }
+      return acc
+    }, {})
+
+    const addonProductMap = productAddons.reduce<Record<string, string[]>>((acc, row) => {
+      if (!row?.addon_id || !row?.product_id) return acc
+      acc[row.addon_id] = acc[row.addon_id] || []
+      if (!acc[row.addon_id].includes(row.product_id)) {
+        acc[row.addon_id].push(row.product_id)
+      }
+      return acc
+    }, {})
+
     // Format menu for AI
     const menu = {
       restaurant: {
@@ -88,6 +135,21 @@ export async function GET() {
               price: product?.price || 0,
             }
           }),
+        }
+      }),
+      addons: (addons || []).map((ad) => {
+        const categories = addonCategoriesMap[ad.id] && addonCategoriesMap[ad.id].length > 0
+          ? addonCategoriesMap[ad.id]
+          : ad.category
+            ? [ad.category]
+            : []
+        const product_ids = addonProductMap[ad.id] || []
+        return {
+          id: ad.id,
+          name: ad.name,
+          price: ad.price,
+          categories,
+          product_ids,
         }
       }),
     }
