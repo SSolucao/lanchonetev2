@@ -362,6 +362,7 @@ export async function createOrderWithItems(
   })
 
   let addonsTotalByItem: Record<number, number> = {}
+  let addonsTotalByItemId: Record<string, number> = {}
 
   if (addonSelections.length > 0) {
     // Fetch addon details
@@ -413,25 +414,44 @@ export async function createOrderWithItems(
     }
   }
 
-  // Recalculate item totals to include addons and update order subtotal/total
+  // Always fetch persisted addons to avoid losing additional values even when the caller does not send addons
+  const orderItemIds = insertedItems.map((item) => item.id)
+  if (orderItemIds.length > 0) {
+    const { data: persistedAddons, error: persistedAddonsError } = await supabase
+      .from("order_item_addons")
+      .select("order_item_id, price, quantity")
+      .in("order_item_id", orderItemIds)
+
+    if (persistedAddonsError) throw persistedAddonsError
+
+    addonsTotalByItemId =
+      persistedAddons?.reduce((acc, addon) => {
+        const total = (Number(addon.price) || 0) * (Number(addon.quantity) || 0)
+        acc[addon.order_item_id] = (acc[addon.order_item_id] || 0) + total
+        return acc
+      }, {} as Record<string, number>) || {}
+  }
+
+  // Recalculate item totals to include persisted addons and update order subtotal/total
   const itemsWithTotals = insertedItems.map((item, index) => {
-    const addonsTotal = addonsTotalByItem[index] || 0
+    const addonsTotal =
+      addonsTotalByItem[index] || // Totals calculated from input (when addons are sent)
+      addonsTotalByItemId[item.id] || // Totals persisted in DB (fallback when addons are missing in input)
+      0
     const baseTotal = (item.unit_price || 0) * (item.quantity || 0)
     const total_price = baseTotal + addonsTotal
     return { ...item, total_price }
   })
 
   // Persist updated item totals
-  if (addonsTotalByItem && Object.keys(addonsTotalByItem).length > 0) {
-    await Promise.all(
-      itemsWithTotals.map((item) =>
-        supabase
-          .from("order_items")
-          .update({ total_price: item.total_price })
-          .eq("id", item.id),
-      ),
-    )
-  }
+  await Promise.all(
+    itemsWithTotals.map((item) =>
+      supabase
+        .from("order_items")
+        .update({ total_price: item.total_price })
+        .eq("id", item.id),
+    ),
+  )
 
   const subtotal = itemsWithTotals.reduce((acc, item) => acc + (Number(item.total_price) || 0), 0)
   const deliveryFee = orderInput.delivery_fee || 0
