@@ -28,15 +28,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, category, price, is_active } = body
+    const { name, category, categories: rawCategories, price, is_active } = body
 
-    if (!name || !category) {
-      return NextResponse.json({ error: "Name and category are required" }, { status: 400 })
+    const categories = Array.isArray(rawCategories)
+      ? Array.from(new Set(rawCategories.map((c: any) => (c ? String(c).trim() : "")).filter(Boolean)))
+      : undefined
+
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 })
+    }
+
+    const hasLegacyCategory = category && String(category).trim().length > 0
+    const hasCategoriesArray = categories && categories.length > 0
+    if (!hasLegacyCategory && !hasCategoriesArray) {
+      return NextResponse.json({ error: "At least one category is required" }, { status: 400 })
     }
 
     const addon = await createAddon(restaurant.id, {
       name,
-      category,
+      category: hasLegacyCategory ? String(category).trim() : undefined,
+      categories,
       price: Number(price) || 0,
       is_active: is_active ?? true,
     })

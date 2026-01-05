@@ -76,6 +76,7 @@ export interface Addon {
   restaurant_id: string
   name: string
   category: string
+  categories?: string[] // New multi-category support (phase 1), keeps legacy category for compatibility
   price: number
   is_active: boolean
   created_at: string

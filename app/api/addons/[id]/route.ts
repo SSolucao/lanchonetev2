@@ -33,17 +33,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const body = await request.json()
-    const { name, category, price, is_active } = body
+    const { name, category, categories: rawCategories, price, is_active } = body
+    const categories = Array.isArray(rawCategories)
+      ? Array.from(new Set(rawCategories.map((c: any) => (c ? String(c).trim() : "")).filter(Boolean)))
+      : undefined
+
     if (name !== undefined && String(name).trim() === "") {
       return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 })
     }
     if (category !== undefined && String(category).trim() === "") {
       return NextResponse.json({ error: "Category cannot be empty" }, { status: 400 })
     }
+    if (categories !== undefined && categories.length === 0 && (category === undefined || category === null)) {
+      return NextResponse.json({ error: "At least one category is required" }, { status: 400 })
+    }
 
     const updated = await updateAddon(id, {
       name,
       category,
+      categories,
       price: price !== undefined ? Number(price) : undefined,
       is_active,
     })

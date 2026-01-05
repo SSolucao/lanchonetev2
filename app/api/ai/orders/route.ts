@@ -322,17 +322,32 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
     if (categoriesSet.size > 0) {
       const { data: addonsData, error: addonsError } = await supabase
         .from("addons")
-        .select("id, name, price, is_active, category")
+        .select(
+          `
+          id,
+          name,
+          price,
+          is_active,
+          category,
+          addon_categories:addon_categories(category)
+        `,
+        )
         .eq("restaurant_id", restaurant.id)
         .eq("is_active", true)
         .in("category", Array.from(categoriesSet))
 
       if (addonsError) throw addonsError
       addonsByCategory = (addonsData || []).reduce((acc: Record<string, any[]>, ad: any) => {
-        if (ad.category) {
-          acc[ad.category] = acc[ad.category] || []
-          acc[ad.category].push(ad)
-        }
+        const catList =
+          (ad.addon_categories || []).map((c: any) => c?.category).filter(Boolean) ||
+          (ad.category ? [ad.category] : [])
+        catList.forEach((cat: string) => {
+          acc[cat] = acc[cat] || []
+          acc[cat].push({
+            ...ad,
+            categories: catList,
+          })
+        })
         return acc
       }, {})
     }

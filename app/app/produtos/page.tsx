@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Pencil, Trash2 } from "lucide-react"
+import { Plus, Search, Pencil, Trash2, X } from "lucide-react"
 import type { Product, Addon } from "@/src/domain/types"
 import { ProductFormDialog } from "@/src/components/ProductFormDialog"
 import {
@@ -346,7 +346,7 @@ export default function ProdutosPage() {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-3 font-medium">Nome</th>
-                <th className="text-left p-3 font-medium">Categoria</th>
+                <th className="text-left p-3 font-medium">Categorias</th>
                 <th className="text-right p-3 font-medium">Preço</th>
                 <th className="text-center p-3 font-medium">Status</th>
                 <th className="text-center p-3 font-medium">Ações</th>
@@ -369,7 +369,11 @@ export default function ProdutosPage() {
                 addons.map((addon) => (
                   <tr key={addon.id} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="p-3">{addon.name}</td>
-                    <td className="p-3">{addon.category}</td>
+                    <td className="p-3">
+                      {addon.categories && addon.categories.length > 0
+                        ? addon.categories.join(", ")
+                        : addon.category}
+                    </td>
                     <td className="p-3 text-right">R$ {Number(addon.price).toFixed(2)}</td>
                     <td className="p-3 text-center">
                       <Badge variant={addon.is_active ? "secondary" : "outline"} className="text-xs">
@@ -438,32 +442,63 @@ interface AddonFormDialogProps {
 
 function AddonFormDialog({ open, addon, onClose, categories }: AddonFormDialogProps) {
   const [name, setName] = useState(addon?.name || "")
-  const [category, setCategory] = useState(addon?.category || "")
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    addon?.categories && addon.categories.length > 0
+      ? addon.categories
+      : addon?.category
+        ? [addon.category]
+        : [],
+  )
   const [price, setPrice] = useState(addon ? String(addon.price) : "")
   const [isActive, setIsActive] = useState(addon?.is_active ?? true)
   const [saving, setSaving] = useState(false)
-  const [useCustomCategory, setUseCustomCategory] = useState(false)
+  const [newCategory, setNewCategory] = useState("")
 
   useEffect(() => {
     setName(addon?.name || "")
-    setCategory(addon?.category || "")
+    setSelectedCategories(
+      addon?.categories && addon.categories.length > 0
+        ? addon.categories
+        : addon?.category
+          ? [addon.category]
+          : [],
+    )
     setPrice(addon ? String(addon.price) : "")
     setIsActive(addon?.is_active ?? true)
-    const hasCategory = addon?.category || ""
-    const hasList = categories && categories.length > 0
-    setUseCustomCategory(!hasList || (hasCategory && !categories.includes(hasCategory)))
+    setNewCategory("")
   }, [addon, open, categories])
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(cat)) {
+        return prev.filter((c) => c !== cat)
+      }
+      return [...prev, cat]
+    })
+  }
+
+  const addCustomCategory = () => {
+    const trimmed = newCategory.trim()
+    if (!trimmed) return
+    setSelectedCategories((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]))
+    setNewCategory("")
+  }
 
   const handleSave = async () => {
     try {
-      if (!name.trim() || !category.trim()) {
-        alert("Nome e categoria são obrigatórios")
+      if (!name.trim()) {
+        alert("Nome é obrigatório")
+        return
+      }
+      if (!selectedCategories.length) {
+        alert("Selecione ou adicione ao menos uma categoria")
         return
       }
       setSaving(true)
       const payload = {
         name: name.trim(),
-        category: category.trim(),
+        category: selectedCategories[0], // legado
+        categories: selectedCategories,
         price: Number(price) || 0,
         is_active: isActive,
       }
@@ -509,44 +544,47 @@ function AddonFormDialog({ open, addon, onClose, categories }: AddonFormDialogPr
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="addon-category">Categoria</Label>
-            {categories.length > 0 && !useCustomCategory ? (
-              <Select
-                value={category || undefined}
-                onValueChange={(val) => {
-                  if (val === "__custom__") {
-                    setUseCustomCategory(true)
-                    setCategory("")
-                  } else {
-                    setCategory(val)
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="__custom__">Outra...</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="space-y-2">
-                <Input
-                  id="addon-category"
-                  placeholder="Ex: Hotdog, Hamburguer, Bebidas"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                />
-                {categories.length > 0 && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setUseCustomCategory(false)}>
-                    Voltar para lista de categorias
-                  </Button>
-                )}
+            <Label>Categorias</Label>
+            {categories.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {categories.map((cat) => (
+                  <label key={cat} className="flex items-center gap-2 rounded border p-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.includes(cat)}
+                      onChange={() => toggleCategory(cat)}
+                      className="h-4 w-4"
+                    />
+                    <span>{cat}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                id="addon-category"
+                placeholder="Adicionar nova categoria"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+              />
+              <Button type="button" onClick={addCustomCategory}>
+                Adicionar
+              </Button>
+            </div>
+            {selectedCategories.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedCategories.map((cat) => (
+                  <Badge key={cat} variant="secondary" className="flex items-center gap-1">
+                    {cat}
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(cat)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
               </div>
             )}
           </div>

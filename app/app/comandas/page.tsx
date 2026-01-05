@@ -29,6 +29,7 @@ interface Addon {
   name: string
   price: number
   category?: string
+  categories?: string[]
   is_active?: boolean
 }
 
@@ -264,7 +265,11 @@ export default function ComandasPage() {
   const resolveProductAddons = (product: Product) => {
     if (product.addons && product.addons.length > 0) return product.addons
     if (!product.category) return []
-    return addons.filter((ad) => ad.category === product.category && ad.is_active !== false)
+    return addons.filter((ad) => {
+      const inArray = Array.isArray(ad.categories) && ad.categories.includes(product.category)
+      const legacyMatch = ad.category === product.category
+      return ad.is_active !== false && (inArray || legacyMatch)
+    })
   }
 
   const handleAddSelectedProduct = () => {

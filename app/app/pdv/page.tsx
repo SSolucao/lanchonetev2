@@ -174,9 +174,13 @@ export default function PdvPage() {
       return product.addons
     }
     // fallback: usar catálogo filtrando por categoria e ativos
-    return addonsCatalog.filter(
-      (ad) => ad.is_active && product.category && ad.category && ad.category === product.category,
-    )
+    return addonsCatalog.filter((ad) => {
+      const category = product.category
+      if (!category || !ad.is_active) return false
+      const matchesArray = Array.isArray((ad as any).categories) && (ad as any).categories.includes(category)
+      const matchesLegacy = ad.category === category
+      return matchesArray || matchesLegacy
+    })
   }
 
   const openProductModal = (product: Product) => {
