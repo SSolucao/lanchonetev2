@@ -83,7 +83,7 @@ export async function GET(request: Request) {
       : null
 
     const supabaseRead = admin || supabase
-    const { data: lastOrder } = await supabaseRead
+    const { data: activeOrders } = await supabaseRead
       .from("orders")
       .select(`
         id,
@@ -106,26 +106,24 @@ export async function GET(request: Request) {
       `)
       .eq("restaurant_id", restaurant.id)
       .eq("customer_id", customer.id)
+      .in("status", ["NOVO", "EM_PREPARO", "SAIU_PARA_ENTREGA"])
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(10)
 
-    // Formatar dados do último pedido se existir
-    const lastOrderFormatted = lastOrder
-      ? {
-          order_number: lastOrder.order_number,
-          status: lastOrder.status,
-          total: lastOrder.total,
-          date: lastOrder.created_at,
-          type: lastOrder.tipo_pedido,
-          items: lastOrder.order_items?.map((item: any) => ({
-            product: item.products?.name || "Produto removido",
-            quantity: item.quantity,
-            price: item.unit_price,
-            notes: item.notes,
-          })),
-        }
-      : null
+    const activeOrdersFormatted =
+      activeOrders?.map((order: any) => ({
+        order_number: order.order_number,
+        status: order.status,
+        total: order.total,
+        date: order.created_at,
+        type: order.tipo_pedido,
+        items: order.order_items?.map((item: any) => ({
+          product: item.products?.name || "Produto removido",
+          quantity: item.quantity,
+          price: item.unit_price,
+          notes: item.notes,
+        })),
+      })) || []
 
     const response = {
       exists: true,
@@ -142,7 +140,7 @@ export async function GET(request: Request) {
         complement: customer.complement,
         delivery_fee: customer.delivery_fee_default || 0,
       },
-      last_order: lastOrderFormatted,
+      active_orders: activeOrdersFormatted,
     }
 
     await logApiCall({
@@ -154,7 +152,7 @@ export async function GET(request: Request) {
       response_body: response,
       restaurant_id: restaurant.id,
       customer_id: customer.id,
-      metadata: { has_last_order: !!lastOrder },
+      metadata: { active_orders_count: activeOrdersFormatted.length },
     })
 
     return NextResponse.json(response)
