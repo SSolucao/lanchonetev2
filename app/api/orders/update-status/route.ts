@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { updateOrderStatus } from "@/src/services/ordersService"
 import { onOrderStatusChanged } from "@/src/services/n8nClient"
+import { notifyOrderCancelled } from "@/src/services/orderStatusEvents"
 import { sendWhatsAppMenu, sendWhatsAppText } from "@/src/services/whatsappService"
 import type { OrderStatus } from "@/src/domain/types"
 
@@ -91,6 +92,14 @@ export async function POST(request: NextRequest) {
         newStatus,
         timestamp: new Date().toISOString(),
       }).catch((err) => console.error("[v0] Failed to notify n8n:", err))
+    }
+
+    if (restaurantId && newStatus === "CANCELADO" && oldStatus !== "CANCELADO") {
+      notifyOrderCancelled({
+        orderId: orderId!,
+        restaurantId,
+        oldStatus,
+      }).catch((err) => console.error("[v0] Failed to notify cancel:", err))
     }
 
     // Notificações WhatsApp

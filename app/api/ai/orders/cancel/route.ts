@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { notifyOrderCancelled } from "@/src/services/orderStatusEvents"
 
 // POST /api/ai/orders/cancel - Cancelar pedido
 export async function POST(request: Request) {
@@ -88,6 +89,12 @@ export async function POST(request: Request) {
     if (updateError) throw updateError
 
     console.log("[v0] Pedido cancelado:", order.id)
+
+    notifyOrderCancelled({
+      orderId: order.id,
+      restaurantId: order.restaurant_id,
+      oldStatus: order.status,
+    }).catch((err) => console.error("[v0] Failed to notify cancel:", err))
 
     return NextResponse.json({
       success: true,

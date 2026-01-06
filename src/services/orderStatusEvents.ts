@@ -9,6 +9,23 @@ type EmPreparoNotificationParams = {
   oldStatus?: OrderStatus
 }
 
+type CancelamentoNotificationParams = {
+  orderId: string
+  restaurantId: string
+  oldStatus?: OrderStatus
+}
+
+function normalizeWhatsAppNumber(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const digits = raw.replace(/\D/g, "")
+  if (!digits) return null
+  if (digits.startsWith("55")) return digits
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`
+  }
+  return digits
+}
+
 export async function notifyOrderEnteredEmPreparo({
   orderId,
   restaurantId,
@@ -44,14 +61,66 @@ export async function notifyOrderEnteredEmPreparo({
       return
     }
 
-    if (orderData?.customer?.phone) {
+    const phone = normalizeWhatsAppNumber(orderData?.customer?.phone)
+    if (phone) {
       const customerName = orderData.customer.name || ""
       const restaurantName = orderData.restaurant?.name || "nosso time"
       const text = `Olá${customerName ? `, ${customerName}` : ""}! Seu pedido #${
         orderData.order_number
       } está em preparo. Avisaremos assim que sair para entrega. Obrigado! – ${restaurantName}`
 
-      sendWhatsAppText({ number: orderData.customer.phone, text }).catch((err) =>
+      sendWhatsAppText({ number: phone, text }).catch((err) =>
+        console.error("[v0] Error sending WhatsApp message:", err),
+      )
+    }
+  } catch (err) {
+    console.error("[v0] Error preparing WhatsApp notification:", err)
+  }
+}
+
+export async function notifyOrderCancelled({
+  orderId,
+  restaurantId,
+  oldStatus = "NOVO",
+}: CancelamentoNotificationParams): Promise<void> {
+  if (oldStatus === "CANCELADO") return
+
+  onOrderStatusChanged({
+    restaurantId,
+    orderId,
+    oldStatus,
+    newStatus: "CANCELADO",
+    timestamp: new Date().toISOString(),
+  }).catch((err) => console.error("[v0] Failed to notify n8n:", err))
+
+  try {
+    const supabase = await createClient()
+    const { data: orderData, error: orderError } = await supabase
+      .from("orders")
+      .select(
+        `
+        id,
+        order_number,
+        restaurant:restaurants(name),
+        customer:customers(name, phone)
+      `,
+      )
+      .eq("id", orderId)
+      .single()
+
+    if (orderError) {
+      console.error("[v0] Error fetching order for WhatsApp notification:", orderError)
+      return
+    }
+
+    const phone = normalizeWhatsAppNumber(orderData?.customer?.phone)
+    if (phone) {
+      const customerName = orderData.customer.name || ""
+      const text = `Olá${customerName ? `, ${customerName}` : ""}. Seu pedido #${
+        orderData.order_number
+      } foi cancelado. Se precisar de ajuda, fale com a gente.`
+
+      sendWhatsAppText({ number: phone, text }).catch((err) =>
         console.error("[v0] Error sending WhatsApp message:", err),
       )
     }
