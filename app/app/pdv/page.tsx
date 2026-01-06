@@ -417,7 +417,7 @@ export default function PdvPage() {
         total,
         payment_method_id: draft.paymentMethodId,
         payment_status: "PAGO" as const,
-        status: "NOVO" as const,
+        status: "EM_PREPARO" as const,
         notes: draft.notes,
       }
 

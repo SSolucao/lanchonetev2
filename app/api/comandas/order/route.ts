@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentRestaurant } from "@/src/services/restaurantsService"
 import { getNextOrderNumber, createOrderWithItems } from "@/src/services/ordersService"
+import { notifyOrderEnteredEmPreparo } from "@/src/services/orderStatusEvents"
 import { createClient } from "@/lib/supabase/server"
 
 // API para criar pedido a partir de uma comanda
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
       subtotal: total,
       delivery_fee: 0,
       total: total,
-      status: "NOVO" as const,
+      status: "EM_PREPARO" as const,
       payment_status: "PENDENTE" as const,
       payment_method_id: null,
       notes: null,
@@ -100,6 +101,11 @@ export async function POST(request: NextRequest) {
 
     const { order, items: createdItems } = await createOrderWithItems(orderInput, orderItems)
     console.log("[v0] Order created with id:", order.id)
+
+    notifyOrderEnteredEmPreparo({
+      orderId: order.id,
+      restaurantId: order.restaurant_id,
+    }).catch((error) => console.error("[v0] Error notifying EM_PREPARO on comanda create:", error))
 
     // Atualizar total da comanda
     const newTotal = comanda.total + total

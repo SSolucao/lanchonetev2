@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createOrderWithItems } from "@/src/services/ordersService"
+import { notifyOrderEnteredEmPreparo } from "@/src/services/orderStatusEvents"
 import type { CreateOrderInput, CreateOrderItemInput } from "@/src/domain/types"
 
 export async function POST(request: Request) {
@@ -25,6 +26,13 @@ export async function POST(request: Request) {
     }
 
     const result = await createOrderWithItems(orderInput, itemsInput)
+
+    if (result.order.status === "EM_PREPARO") {
+      notifyOrderEnteredEmPreparo({
+        orderId: result.order.id,
+        restaurantId: result.order.restaurant_id,
+      }).catch((error) => console.error("[v0] Error notifying EM_PREPARO on create:", error))
+    }
 
     return NextResponse.json(result)
   } catch (error) {
