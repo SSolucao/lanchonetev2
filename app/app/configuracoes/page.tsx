@@ -39,6 +39,7 @@ export default function ConfiguracoesPage() {
   const [vias, setVias] = useState("2")
   const [encoding, setEncoding] = useState("CP860")
   const [codePage, setCodePage] = useState(3)
+  const [sendCustomerPdf, setSendCustomerPdf] = useState(false)
   const [isListingPrinters, setIsListingPrinters] = useState(false)
   const [isTestingPrint, setIsTestingPrint] = useState(false)
   const [categories, setCategories] = useState<string[]>([])
@@ -99,6 +100,7 @@ export default function ConfiguracoesPage() {
         setVias(parsed.vias ? String(parsed.vias) : "2")
         setEncoding(typeof parsed.encoding === "string" && parsed.encoding ? parsed.encoding : "CP860")
         setCodePage(Number.isFinite(Number(parsed.codePage)) ? Number(parsed.codePage) : 3)
+        setSendCustomerPdf(Boolean(parsed.sendCustomerPdf))
       } catch (err) {
         console.warn("Não foi possível carregar configuração de impressora", err)
       }
@@ -299,9 +301,10 @@ export default function ConfiguracoesPage() {
       vias,
       encoding,
       codePage,
+      sendCustomerPdf,
     }
     localStorage.setItem("printerConfig", JSON.stringify(config))
-  }, [selectedPrinter, autoPrint, vias, encoding, codePage])
+  }, [selectedPrinter, autoPrint, vias, encoding, codePage, sendCustomerPdf])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -868,10 +871,16 @@ export default function ConfiguracoesPage() {
                 <h2 className="text-xl font-semibold">Impressão (QZ Tray)</h2>
                 <p className="text-sm text-muted-foreground">Configure o modelo do cupom, filtros e teste.</p>
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={autoPrint} onCheckedChange={(v) => setAutoPrint(Boolean(v))} />
-                Imprimir automaticamente ao entrar em produção
-              </label>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <Checkbox checked={autoPrint} onCheckedChange={(v) => setAutoPrint(Boolean(v))} />
+                  Imprimir automaticamente ao entrar em produção
+                </label>
+                <label className="flex items-center gap-2">
+                  <Checkbox checked={sendCustomerPdf} onCheckedChange={(v) => setSendCustomerPdf(Boolean(v))} />
+                  Enviar PDF do pedido para o cliente
+                </label>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6">

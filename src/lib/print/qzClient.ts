@@ -6,6 +6,7 @@ interface PrinterConfig {
   vias: number
   encoding: string
   codePage: number
+  sendCustomerPdf: boolean
 }
 
 const STORAGE_KEY = "printerConfig"
@@ -30,11 +31,27 @@ interface PrinterModelConfig {
 
 export const getPrinterConfig = (): PrinterConfig => {
   if (typeof window === "undefined") {
-    return { selectedPrinter: "", autoPrint: false, vias: 1, encoding: "CP860", codePage: 3 }
+    return {
+      selectedPrinter: "",
+      autoPrint: false,
+      vias: 1,
+      encoding: "CP860",
+      codePage: 3,
+      sendCustomerPdf: false,
+    }
   }
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return { selectedPrinter: "", autoPrint: false, vias: 1, encoding: "CP860", codePage: 3 }
+    if (!saved) {
+      return {
+        selectedPrinter: "",
+        autoPrint: false,
+        vias: 1,
+        encoding: "CP860",
+        codePage: 3,
+        sendCustomerPdf: false,
+      }
+    }
     const parsed = JSON.parse(saved)
     return {
       selectedPrinter: parsed.selectedPrinter || "",
@@ -42,9 +59,17 @@ export const getPrinterConfig = (): PrinterConfig => {
       vias: Math.max(1, Number(parsed.vias) || 1),
       encoding: typeof parsed.encoding === "string" && parsed.encoding ? parsed.encoding : "CP860",
       codePage: Number.isFinite(Number(parsed.codePage)) ? Number(parsed.codePage) : 3,
+      sendCustomerPdf: Boolean(parsed.sendCustomerPdf),
     }
   } catch (_err) {
-    return { selectedPrinter: "", autoPrint: false, vias: 1, encoding: "CP860", codePage: 3 }
+    return {
+      selectedPrinter: "",
+      autoPrint: false,
+      vias: 1,
+      encoding: "CP860",
+      codePage: 3,
+      sendCustomerPdf: false,
+    }
   }
 }
 

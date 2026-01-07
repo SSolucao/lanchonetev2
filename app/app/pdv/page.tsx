@@ -475,6 +475,14 @@ export default function PdvPage() {
         }
       }
 
+      if (printerConfig.sendCustomerPdf) {
+        try {
+          await fetch(`/api/orders/${order.id}/send-customer-pdf`, { method: "POST" })
+        } catch (err) {
+          console.error("[v0] Envio do PDF para o cliente falhou:", err)
+        }
+      }
+
       clearDraft()
       toast({
         title: "Pedido criado",

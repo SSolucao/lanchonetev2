@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createOrderWithItems, getNextOrderNumber } from "@/src/services/ordersService"
+import { sendOrderPdfToWhatsApp } from "@/src/services/whatsappService"
 import { logApiCall } from "@/src/services/apiLogService"
 
 function normalizeForSearch(value: string) {
@@ -525,6 +526,19 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
         items_count: orderItems.length,
       },
     })
+
+    const customerPhone = customer?.phone ? String(customer.phone).replace(/\D/g, "") : ""
+    if (customerPhone) {
+      try {
+        await sendOrderPdfToWhatsApp({
+          orderId: order.id,
+          number: customerPhone,
+          delayMs: 6000,
+        })
+      } catch (err) {
+        console.error("[v0] Error sending order PDF via WhatsApp:", err)
+      }
+    }
 
     return NextResponse.json(response)
   } catch (error) {
