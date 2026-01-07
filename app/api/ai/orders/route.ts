@@ -334,13 +334,14 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
         )
         .eq("restaurant_id", restaurant.id)
         .eq("is_active", true)
-        .in("category", Array.from(categoriesSet))
 
       if (addonsError) throw addonsError
       addonsByCategory = (addonsData || []).reduce((acc: Record<string, any[]>, ad: any) => {
         const catList =
           (ad.addon_categories || []).map((c: any) => c?.category).filter(Boolean) ||
           (ad.category ? [ad.category] : [])
+        const hasMatch = catList.some((cat: string) => categoriesSet.has(cat))
+        if (!hasMatch) return acc
         catList.forEach((cat: string) => {
           acc[cat] = acc[cat] || []
           acc[cat].push({
