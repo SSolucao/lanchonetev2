@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { Product, PaymentMethod, Customer, Restaurant } from "@/src/domain/types"
 import { formatPhone, formatCEP, unformatNumbers, fetchAddressFromCEP } from "@/lib/format-utils"
 import { CustomerFormDialog } from "@/src/components/CustomerFormDialog"
+import { buildEscposFromOrder, getPrinterConfig, printCupom } from "@/src/lib/print/qzClient"
 
 export default function PdvPage() {
   const { toast } = useToast()
@@ -459,6 +460,20 @@ export default function PdvPage() {
 
       setCreatedOrderId(order.id)
       setCreatedOrderNumber(order.order_number)
+
+      const printerConfig = getPrinterConfig()
+      if (printerConfig.autoPrint && printerConfig.selectedPrinter) {
+        try {
+          const detailRes = await fetch(`/api/orders/${order.id}/print-data`)
+          if (detailRes.ok) {
+            const data = await detailRes.json()
+            const payload = buildEscposFromOrder(data.order)
+            await printCupom(printerConfig.selectedPrinter, payload, printerConfig.vias)
+          }
+        } catch (err) {
+          console.error("[v0] Auto-print ao criar pedido falhou:", err)
+        }
+      }
 
       clearDraft()
       toast({
