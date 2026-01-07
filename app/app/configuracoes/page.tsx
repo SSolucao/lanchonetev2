@@ -37,6 +37,8 @@ export default function ConfiguracoesPage() {
   const [selectedPrinter, setSelectedPrinter] = useState("")
   const [autoPrint, setAutoPrint] = useState(false)
   const [vias, setVias] = useState("2")
+  const [encoding, setEncoding] = useState("CP860")
+  const [codePage, setCodePage] = useState(3)
   const [isListingPrinters, setIsListingPrinters] = useState(false)
   const [isTestingPrint, setIsTestingPrint] = useState(false)
   const [categories, setCategories] = useState<string[]>([])
@@ -64,6 +66,12 @@ export default function ConfiguracoesPage() {
   const [pixKeyType, setPixKeyType] = useState("")
   const [pixKey, setPixKey] = useState("")
 
+  const charsetOptions = [
+    { label: "Português (CP860)", encoding: "CP860", codePage: 3 },
+    { label: "Multilíngue (CP850)", encoding: "CP850", codePage: 2 },
+    { label: "Windows-1252", encoding: "CP1252", codePage: 16 },
+  ]
+
   // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -89,6 +97,8 @@ export default function ConfiguracoesPage() {
         setSelectedPrinter(parsed.selectedPrinter || "")
         setAutoPrint(Boolean(parsed.autoPrint))
         setVias(parsed.vias ? String(parsed.vias) : "2")
+        setEncoding(typeof parsed.encoding === "string" && parsed.encoding ? parsed.encoding : "CP860")
+        setCodePage(Number.isFinite(Number(parsed.codePage)) ? Number(parsed.codePage) : 3)
       } catch (err) {
         console.warn("Não foi possível carregar configuração de impressora", err)
       }
@@ -287,9 +297,11 @@ export default function ConfiguracoesPage() {
       selectedPrinter,
       autoPrint,
       vias,
+      encoding,
+      codePage,
     }
     localStorage.setItem("printerConfig", JSON.stringify(config))
-  }, [selectedPrinter, autoPrint, vias])
+  }, [selectedPrinter, autoPrint, vias, encoding, codePage])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -353,6 +365,7 @@ export default function ConfiguracoesPage() {
         "1x X-BURGER",
         "  + Bacon",
         "  + Queijo",
+        "  Obs: Sem observação",
         "",
         "Obrigado!",
       ]
@@ -863,7 +876,7 @@ export default function ConfiguracoesPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6">
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label>Impressora padrão</Label>
                     <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
@@ -907,6 +920,32 @@ export default function ConfiguracoesPage() {
                         <SelectItem value="48">48 col</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Acentos</Label>
+                    <Select
+                      value={encoding}
+                      onValueChange={(value) => {
+                        setEncoding(value)
+                        const option = charsetOptions.find((opt) => opt.encoding === value)
+                        if (option) setCodePage(option.codePage)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {charsetOptions.map((opt) => (
+                          <SelectItem key={opt.encoding} value={opt.encoding}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Se os acentos saírem errados, teste outra opção.
+                    </p>
                   </div>
                 </div>
 
