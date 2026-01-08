@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import type { DeliveryRule } from "@/src/domain/types"
 import { formatCEP, unformatNumbers, fetchAddressFromCEP } from "@/lib/format-utils"
@@ -24,6 +25,7 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
   const [fromKm, setFromKm] = useState("")
   const [toKm, setToKm] = useState("")
   const [cep, setCep] = useState("")
+  const [bulkCeps, setBulkCeps] = useState("")
   const [neighborhood, setNeighborhood] = useState("")
   const [fee, setFee] = useState("")
 
@@ -33,6 +35,7 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
         setRuleType("neighborhood")
         setNeighborhood(deliveryRule.neighborhood)
         setCep("")
+        setBulkCeps("")
         setFromKm("")
         setToKm("")
       } else {
@@ -40,6 +43,7 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
         setFromKm(deliveryRule.from_km?.toString() || "")
         setToKm(deliveryRule.to_km?.toString() || "")
         setCep("")
+        setBulkCeps("")
         setNeighborhood("")
       }
       setFee(deliveryRule.fee.toString())
@@ -53,8 +57,19 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
     setFromKm("")
     setToKm("")
     setCep("")
+    setBulkCeps("")
     setNeighborhood("")
     setFee("")
+  }
+
+  function parseCepList(value: string) {
+    const unique = new Set<string>()
+    value
+      .split(/[;,\s]+/)
+      .map((entry) => unformatNumbers(entry))
+      .filter((entry) => entry.length === 8)
+      .forEach((entry) => unique.add(entry))
+    return Array.from(unique)
   }
 
   async function handleCEPChange(value: string) {
@@ -102,7 +117,15 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
         return
       }
     } else {
-      if (!neighborhood.trim()) {
+      const cepList = parseCepList(bulkCeps)
+      const useBulk = !deliveryRule && bulkCeps.trim().length > 0
+
+      if (useBulk && cepList.length === 0) {
+        alert("Nenhum CEP válido encontrado")
+        return
+      }
+
+      if (!useBulk && !neighborhood.trim()) {
         alert("Preencha o CEP para buscar o bairro")
         return
       }
@@ -110,6 +133,51 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
 
     try {
       setLoading(true)
+
+      const useBulk = ruleType === "neighborhood" && !deliveryRule && bulkCeps.trim().length > 0
+
+      if (useBulk) {
+        const cepList = parseCepList(bulkCeps)
+        const invalidCeps: string[] = []
+        const failedCeps: string[] = []
+        let successCount = 0
+
+        for (const cepItem of cepList) {
+          const addressData = await fetchAddressFromCEP(cepItem)
+          if (!addressData?.bairro) {
+            invalidCeps.push(cepItem)
+            continue
+          }
+
+          const response = await fetch("/api/delivery-rules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              neighborhood: addressData.bairro.trim(),
+              fee: Number.parseFloat(fee),
+              from_km: null,
+              to_km: null,
+            }),
+          })
+
+          if (!response.ok) {
+            failedCeps.push(cepItem)
+            continue
+          }
+
+          successCount += 1
+        }
+
+        const messages = [`Regras criadas: ${successCount}`]
+        if (invalidCeps.length > 0) messages.push(`CEPs sem bairro: ${invalidCeps.join(", ")}`)
+        if (failedCeps.length > 0) messages.push(`Falha ao salvar: ${failedCeps.join(", ")}`)
+        alert(messages.join("\n"))
+
+        if (successCount > 0) {
+          onClose(true)
+        }
+        return
+      }
 
       const body =
         ruleType === "distance"
@@ -174,22 +242,44 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
 
           {ruleType === "neighborhood" ? (
             <>
-              <div className="space-y-2">
-                <Label>CEP do Bairro *</Label>
-                <Input
-                  type="text"
-                  placeholder="12345-678"
-                  value={cep}
-                  onChange={(e) => handleCEPChange(e.target.value)}
-                  inputMode="numeric"
-                  disabled={loadingCEP}
-                  required
-                />
-                {loadingCEP && <p className="text-xs text-muted-foreground">Buscando bairro...</p>}
-                <p className="text-xs text-muted-foreground">Digite um CEP do bairro para buscar automaticamente</p>
-              </div>
+              {!deliveryRule && (
+                <div className="space-y-2">
+                  <Label>CEPs em massa (opcional)</Label>
+                  <Textarea
+                    placeholder="Cole CEPs separados por ; , espaço ou quebra de linha"
+                    value={bulkCeps}
+                    onChange={(e) => setBulkCeps(e.target.value)}
+                    rows={4}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Exemplo: 12345-678; 12345-679 12345-680
+                  </p>
+                  {bulkCeps.trim() && (
+                    <p className="text-xs text-muted-foreground">
+                      Detectados: {parseCepList(bulkCeps).length} CEPs válidos
+                    </p>
+                  )}
+                </div>
+              )}
 
-              {neighborhood && (
+              {!(bulkCeps.trim() && !deliveryRule) && (
+                <div className="space-y-2">
+                  <Label>CEP do Bairro *</Label>
+                  <Input
+                    type="text"
+                    placeholder="12345-678"
+                    value={cep}
+                    onChange={(e) => handleCEPChange(e.target.value)}
+                    inputMode="numeric"
+                    disabled={loadingCEP}
+                    required
+                  />
+                  {loadingCEP && <p className="text-xs text-muted-foreground">Buscando bairro...</p>}
+                  <p className="text-xs text-muted-foreground">Digite um CEP do bairro para buscar automaticamente</p>
+                </div>
+              )}
+
+              {neighborhood && !(bulkCeps.trim() && !deliveryRule) && (
                 <div className="space-y-2">
                   <Label>Bairro Encontrado</Label>
                   <Input type="text" value={neighborhood} readOnly className="bg-muted" />
