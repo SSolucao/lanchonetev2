@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { Product, StockItem } from "@/src/domain/types"
+import type { Product } from "@/src/domain/types"
 import { Plus, X } from "lucide-react"
 import { useAuth } from "@/src/context/AuthContext"
 
@@ -24,13 +24,6 @@ interface ComboItem {
   product_id: string
   product_name: string
   quantity: number
-}
-
-interface RecipeItem {
-  stock_item_id: string
-  stock_item_name: string
-  quantity: number
-  unit: string
 }
 
 export function ProductFormDialog({ open, product, onClose }: ProductFormDialogProps) {
@@ -49,11 +42,6 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
   const [selectedProductId, setSelectedProductId] = useState("")
   const [selectedQuantity, setSelectedQuantity] = useState("1")
 
-  const [recipeItems, setRecipeItems] = useState<RecipeItem[]>([])
-  const [availableStockItems, setAvailableStockItems] = useState<StockItem[]>([])
-  const [selectedStockItemId, setSelectedStockItemId] = useState("")
-  const [selectedRecipeQuantity, setSelectedRecipeQuantity] = useState("1")
-
   useEffect(() => {
     if (open) {
       if (product) {
@@ -65,19 +53,14 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
         setDescription(product.description || "")
         setIsActive(product.is_active)
 
-        if (product.id) {
-          if (product.type === "COMBO") {
-            loadComboItems(product.id)
-          } else {
-            loadRecipeItems(product.id)
-          }
+        if (product.id && product.type === "COMBO") {
+          loadComboItems(product.id)
         }
       } else {
         resetForm()
       }
 
       loadAvailableProducts()
-      loadAvailableStockItems()
     }
   }, [open, product])
 
@@ -91,9 +74,6 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
     setComboItems([])
     setSelectedProductId("")
     setSelectedQuantity("1")
-    setRecipeItems([])
-    setSelectedStockItemId("")
-    setSelectedRecipeQuantity("1")
   }
 
   async function loadAvailableProducts() {
@@ -153,64 +133,6 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
     setComboItems(comboItems.filter((item) => item.product_id !== productId))
   }
 
-  async function loadAvailableStockItems() {
-    try {
-      const response = await fetch("/api/stock-items")
-      if (!response.ok) throw new Error("Failed to load stock items")
-      const data = await response.json()
-      setAvailableStockItems(data.filter((item: StockItem) => item.is_active))
-    } catch (error) {
-      console.error("Error loading stock items:", error)
-    }
-  }
-
-  async function loadRecipeItems(productId: string) {
-    if (!productId || productId === "undefined") {
-      console.error("[v0] Invalid product ID:", productId)
-      return
-    }
-
-    try {
-      console.log("[v0] Loading recipe items for:", productId)
-      const response = await fetch(`/api/products/${productId}/recipe`)
-      if (!response.ok) throw new Error("Failed to load recipe items")
-      const data = await response.json()
-      setRecipeItems(data)
-    } catch (error) {
-      console.error("Error loading recipe items:", error)
-    }
-  }
-
-  function handleAddRecipeItem() {
-    if (!selectedStockItemId || !selectedRecipeQuantity) return
-
-    const stockItem = availableStockItems.find((item) => item.id === selectedStockItemId)
-    if (!stockItem) return
-
-    const existing = recipeItems.find((item) => item.stock_item_id === selectedStockItemId)
-    if (existing) {
-      alert("Este item já está na receita")
-      return
-    }
-
-    setRecipeItems([
-      ...recipeItems,
-      {
-        stock_item_id: selectedStockItemId,
-        stock_item_name: stockItem.name,
-        quantity: Number.parseFloat(selectedRecipeQuantity),
-        unit: stockItem.unit,
-      },
-    ])
-
-    setSelectedStockItemId("")
-    setSelectedRecipeQuantity("1")
-  }
-
-  function handleRemoveRecipeItem(stockItemId: string) {
-    setRecipeItems(recipeItems.filter((item) => item.stock_item_id !== stockItemId))
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
@@ -241,13 +163,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
                 quantity: item.quantity,
               }))
             : [],
-        recipe_items:
-          type === "UNIT"
-            ? recipeItems.map((item) => ({
-                stock_item_id: item.stock_item_id,
-                quantity: item.quantity,
-              }))
-            : [],
+        recipe_items: [],
       }
 
       const url = product?.id ? `/api/products/${product.id}` : "/api/products"
@@ -351,76 +267,6 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
               Ativo
             </Label>
           </div>
-
-          {type === "UNIT" && (
-            <div className="space-y-4 border-t pt-4">
-              <div>
-                <Label className="text-base font-semibold">Receita do produto</Label>
-                <p className="text-sm text-muted-foreground">Adicione os itens de estoque que compõem este produto</p>
-              </div>
-
-              <div className="flex gap-2">
-                <Select value={selectedStockItemId} onValueChange={setSelectedStockItemId}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Selecione um item de estoque" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableStockItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} ({item.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={selectedRecipeQuantity}
-                  onChange={(e) => setSelectedRecipeQuantity(e.target.value)}
-                  className="w-24"
-                  placeholder="Qtd"
-                />
-                <Button type="button" onClick={handleAddRecipeItem} disabled={!selectedStockItemId}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {recipeItems.length > 0 && (
-                <div className="border rounded-lg">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-2 text-sm font-medium">Item de estoque</th>
-                        <th className="text-center p-2 text-sm font-medium">Quantidade</th>
-                        <th className="text-center p-2 text-sm font-medium w-16"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recipeItems.map((item) => (
-                        <tr key={item.stock_item_id} className="border-b last:border-0">
-                          <td className="p-2">{item.stock_item_name}</td>
-                          <td className="p-2 text-center">
-                            {item.quantity} {item.unit}
-                          </td>
-                          <td className="p-2 text-center">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveRecipeItem(item.stock_item_id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
 
           {type === "COMBO" && (
             <div className="space-y-4 border-t pt-4">

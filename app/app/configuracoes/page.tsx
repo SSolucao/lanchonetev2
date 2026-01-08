@@ -22,7 +22,6 @@ import type { Restaurant, PaymentMethod, DeliveryRule } from "@/src/domain/types
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { PaymentMethodFormDialog } from "@/src/components/PaymentMethodFormDialog"
 import { DeliveryRuleFormDialog } from "@/src/components/DeliveryRuleFormDialog"
-import { StockManagementTab } from "@/src/components/StockManagementTab"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { printCupom } from "@/src/lib/print/qzClient"
@@ -576,7 +575,6 @@ export default function ConfiguracoesPage() {
           <TabsTrigger value="restaurant">Estabelecimento</TabsTrigger>
           <TabsTrigger value="payment">Formas de pagamento</TabsTrigger>
           <TabsTrigger value="delivery">Regras de entrega</TabsTrigger>
-          <TabsTrigger value="stock">Estoque</TabsTrigger>
           <TabsTrigger value="printer">Impressão</TabsTrigger>
         </TabsList>
 
@@ -858,10 +856,6 @@ export default function ConfiguracoesPage() {
               </table>
             </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="stock">
-          <StockManagementTab />
         </TabsContent>
 
         <TabsContent value="printer">
