@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { listDeliveryRules, createDeliveryRule } from "@/src/services/deliveryRulesService"
 import { getCurrentRestaurant } from "@/src/services/restaurantsService"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
@@ -29,6 +30,20 @@ export async function POST(request: NextRequest) {
       ...body,
       restaurant_id: restaurant.id,
     })
+
+    if (deliveryRule.neighborhood) {
+      const supabase = await createClient()
+      const normalized = deliveryRule.neighborhood.trim()
+      if (normalized) {
+        const pattern = `%${normalized}%`
+        await supabase
+          .from("customers")
+          .update({ delivery_fee_default: deliveryRule.fee })
+          .eq("restaurant_id", restaurant.id)
+          .ilike("neighborhood", pattern)
+          .or("delivery_fee_default.is.null,delivery_fee_default.eq.0")
+      }
+    }
 
     return NextResponse.json(deliveryRule)
   } catch (error) {

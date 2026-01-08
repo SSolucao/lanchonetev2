@@ -48,6 +48,7 @@ export interface Customer {
   city: string | null
   complement: string | null
   notes: string | null
+  delivery_fee_default?: number | null
   created_at: string
   updated_at: string
 }

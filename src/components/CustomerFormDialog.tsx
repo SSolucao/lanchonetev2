@@ -29,6 +29,8 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
   const [city, setCity] = useState("")
   const [complement, setComplement] = useState("")
   const [notes, setNotes] = useState("")
+  const [deliveryFee, setDeliveryFee] = useState("")
+  const [deliveryFeeTouched, setDeliveryFeeTouched] = useState(false)
 
   useEffect(() => {
     if (open && customer) {
@@ -41,6 +43,10 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
       setCity(customer.city || "")
       setComplement(customer.complement || "")
       setNotes(customer.notes || "")
+      setDeliveryFee(
+        typeof customer.delivery_fee_default === "number" ? customer.delivery_fee_default.toFixed(2) : "",
+      )
+      setDeliveryFeeTouched(false)
     } else if (open) {
       resetForm()
     }
@@ -56,6 +62,8 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
     setCity("")
     setComplement("")
     setNotes("")
+    setDeliveryFee("")
+    setDeliveryFeeTouched(false)
   }
 
   async function handleCEPChange(value: string) {
@@ -99,7 +107,7 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
         }
       }
 
-      const body = {
+      const body: Record<string, any> = {
         name,
         phone: cleanPhone,
         cep: cep ? unformatNumbers(cep) : null,
@@ -109,6 +117,10 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
         city: city || null,
         complement: complement || null,
         notes: notes || null,
+      }
+
+      if (deliveryFeeTouched && deliveryFee !== "") {
+        body.delivery_fee_default = Number.parseFloat(deliveryFee)
       }
 
       const url = customer ? `/api/customers/${customer.id}` : "/api/customers"
@@ -196,6 +208,24 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
           <div className="space-y-2">
             <Label>Observações</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Taxa de entrega padrão (R$)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={deliveryFee}
+              onChange={(e) => {
+                setDeliveryFee(e.target.value)
+                setDeliveryFeeTouched(true)
+              }}
+              placeholder="Automático"
+            />
+            <p className="text-xs text-muted-foreground">
+              Se deixar em branco, o sistema calcula pela regra de bairro/distância quando o endereço mudar.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-4">

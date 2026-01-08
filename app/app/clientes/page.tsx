@@ -143,13 +143,14 @@ export default function ClientesPage() {
                 <th className="text-left p-3 font-medium">Telefone</th>
                 <th className="text-left p-3 font-medium">Bairro</th>
                 <th className="text-left p-3 font-medium">Cidade</th>
+                <th className="text-right p-3 font-medium">Taxa (R$)</th>
                 <th className="text-center p-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
               {filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <td colSpan={6} className="text-center py-8 text-muted-foreground">
                     Nenhum cliente encontrado
                   </td>
                 </tr>
@@ -160,6 +161,12 @@ export default function ClientesPage() {
                     <td className="p-3">{customer.phone || "—"}</td>
                     <td className="p-3">{customer.neighborhood || "—"}</td>
                     <td className="p-3">{customer.city || "—"}</td>
+                    <td className="p-3 text-right">
+                      {(customer.delivery_fee_default ?? 0).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </td>
                     <td className="p-3">
                       <div className="flex items-center justify-center gap-2">
                         <Button variant="ghost" size="sm" onClick={() => handleEdit(customer)}>

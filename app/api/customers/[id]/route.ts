@@ -44,7 +44,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       body.neighborhood !== existingCustomer.neighborhood ||
       body.city !== existingCustomer.city
 
-    if (addressChanged && body.cep && body.street && body.number) {
+    const hasManualFee = body.delivery_fee_default !== undefined && body.delivery_fee_default !== null
+
+    if (!hasManualFee && addressChanged && body.cep && body.street && body.number) {
       try {
         const restaurant = await getFirstRestaurant()
         if (restaurant?.cep_origem && restaurant?.address) {
