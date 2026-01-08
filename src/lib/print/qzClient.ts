@@ -246,7 +246,9 @@ export const buildEscposFromOrder = (order: any): string[] => {
         return "ENTREGA"
       case "COMANDA":
         return order?.comanda?.numero
-          ? `COMANDA #${String(order.comanda.numero).padStart(3, "0")}`
+          ? `COMANDA #${String(order.comanda.numero).padStart(3, "0")}${
+              order?.comanda?.mesa ? ` - ${order.comanda.mesa}` : ""
+            }`
           : "COMANDA"
       default:
         if (order?.channel === "BALCAO") return "BALCÃO"
@@ -286,10 +288,12 @@ export const buildEscposFromOrder = (order: any): string[] => {
     lines.push("-------")
   })
 
-  if (model.showCustomer && order?.customer) {
+  const fallbackCustomerName = order?.comanda?.customer_name
+  const customerName = order?.customer?.name || fallbackCustomerName
+  if (model.showCustomer && customerName) {
     lines.push("Cliente")
-    if (order.customer.name) lines.push(`Nome: ${order.customer.name}`)
-    if (order.customer.phone) lines.push(`Telefone: ${order.customer.phone}`)
+    lines.push(`Nome: ${customerName}`)
+    if (order?.customer?.phone) lines.push(`Telefone: ${order.customer.phone}`)
     const shouldShowAddress =
       order?.tipo_pedido === "ENTREGA" ||
       order?.tipo_pedido === "RETIRADA" ||

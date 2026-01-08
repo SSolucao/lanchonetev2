@@ -13,6 +13,7 @@ import { Plus, RefreshCw, Clock, Receipt, User, Minus, ShoppingCart, Trash2, Sea
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Textarea } from "@/components/ui/textarea"
+import { buildEscposFromOrder, getPrinterConfig, printCupom } from "@/src/lib/print/qzClient"
 
 interface Product {
   id: string
@@ -330,6 +331,20 @@ export default function ComandasPage() {
         const data = await res.json()
         console.log("[v0] Order created successfully:", data)
 
+        const printerConfig = getPrinterConfig()
+        if (printerConfig.autoPrint && printerConfig.selectedPrinter) {
+          try {
+            const detailRes = await fetch(`/api/orders/${data.order.id}/print-data`)
+            if (detailRes.ok) {
+              const detail = await detailRes.json()
+              const payload = buildEscposFromOrder(detail.order)
+              await printCupom(printerConfig.selectedPrinter, payload, printerConfig.vias)
+            }
+          } catch (err) {
+            console.error("[v0] Auto-print em comanda falhou:", err)
+          }
+        }
+
         toast({
           title: "Pedido enviado",
           description: "Pedido enviado para a cozinha!",
@@ -443,11 +458,26 @@ export default function ComandasPage() {
         fetchComandas()
       } else {
         const errorData = await res.json()
-        console.error("[v0] Error response:", errorData)
+        if (res.status === 409 && errorData?.error) {
+          toast({
+            title: "Pedidos em aberto",
+            description: errorData.error,
+            variant: "destructive",
+          })
+          return
+        }
         throw new Error(errorData.error || "Failed to close comanda")
       }
     } catch (error: any) {
-      console.error("[v0] Error closing comanda:", error)
+      if (String(error.message || "").includes("pedidos em aberto")) {
+        toast({
+          title: "Pedidos em aberto",
+          description: "Finalize os pedidos antes de fechar a comanda.",
+          variant: "destructive",
+        })
+        return
+      }
+      console.warn("[v0] Error closing comanda:", error)
       toast({
         title: "Erro",
         description: error.message || "Não foi possível fechar a comanda",

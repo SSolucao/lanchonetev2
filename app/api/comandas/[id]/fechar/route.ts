@@ -12,11 +12,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       payment_method_id: body.payment_method_id,
     }
 
-    const comanda = await fecharComanda(id, input)
+    try {
+      const comanda = await fecharComanda(id, input)
 
-    console.log("[v0] Comanda closed successfully:", comanda)
+      console.log("[v0] Comanda closed successfully:", comanda)
 
-    return NextResponse.json(comanda)
+      return NextResponse.json(comanda)
+    } catch (error: any) {
+      if (error?.message?.includes("pedidos em aberto")) {
+        return NextResponse.json({ error: error.message }, { status: 409 })
+      }
+      throw error
+    }
   } catch (error: any) {
     console.error("[v0] Error closing comanda:", error)
     return NextResponse.json({ error: error.message || "Failed to close comanda" }, { status: 500 })

@@ -181,7 +181,7 @@ export async function listOrdersForKanban(
       if (order.comanda_id) {
         const { data: comandaData } = await supabase
           .from("comandas")
-          .select("id, numero, mesa")
+          .select("id, numero, mesa, customer_name, customer_id")
           .eq("id", order.comanda_id)
           .single()
 
@@ -190,10 +190,21 @@ export async function listOrdersForKanban(
         }
       }
 
+      const resolvedCustomer =
+        order.customer ||
+        (comanda?.customer_name
+          ? {
+              id: comanda.customer_id || "",
+              name: comanda.customer_name,
+              phone: null,
+            }
+          : null)
+
       return {
         ...order,
         items,
         comanda,
+        customer: resolvedCustomer,
       } as OrderWithDetails
     }),
   )
@@ -527,7 +538,7 @@ export async function getOrderForPrint(orderId: string): Promise<OrderForPrint |
   if ((orderData as any)?.comanda_id) {
     const { data: comandaData, error: comandaError } = await supabase
       .from("comandas")
-      .select("id, numero, mesa")
+      .select("id, numero, mesa, customer_name, customer_id")
       .eq("id", (orderData as any).comanda_id)
       .single()
 
@@ -558,6 +569,15 @@ export async function getOrderForPrint(orderId: string): Promise<OrderForPrint |
   return {
     ...orderData,
     comanda,
+    customer:
+      (orderData as any)?.customer ||
+      (comanda?.customer_name
+        ? {
+            id: comanda.customer_id || "",
+            name: comanda.customer_name,
+            phone: null,
+          }
+        : null),
     items,
   } as OrderForPrint
 }

@@ -73,6 +73,7 @@ export async function listComandas(restaurantId: string, status?: "ABERTA" | "FE
         .from("orders")
         .select("id, order_number, total, status, created_at")
         .eq("comanda_id", comanda.id)
+        .neq("status", "CANCELADO")
         .order("created_at", { ascending: false })
 
       if (ordersError) throw ordersError
@@ -134,6 +135,7 @@ export async function getComandaById(id: string): Promise<Comanda | null> {
     .from("orders")
     .select("id, order_number, total, status, created_at")
     .eq("comanda_id", id)
+    .neq("status", "CANCELADO")
     .order("created_at", { ascending: false })
 
   if (ordersError) throw ordersError
@@ -201,6 +203,18 @@ export async function createComanda(input: CreateComandaInput): Promise<Comanda>
 
 export async function fecharComanda(id: string, input: FecharComandaInput): Promise<Comanda> {
   const supabase = await createClient()
+
+  const { data: openOrders, error: openOrdersError } = await supabase
+    .from("orders")
+    .select("id, status")
+    .eq("comanda_id", id)
+    .neq("status", "FINALIZADO")
+    .neq("status", "CANCELADO")
+
+  if (openOrdersError) throw openOrdersError
+  if (openOrders && openOrders.length > 0) {
+    throw new Error("Há pedidos em aberto. Finalize os pedidos antes de fechar a comanda.")
+  }
 
   const updates = {
     status: "FECHADA" as const,
