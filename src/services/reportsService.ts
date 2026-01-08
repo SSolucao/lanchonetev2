@@ -32,27 +32,27 @@ export interface ChannelDistribution {
   total_revenue: number
 }
 
-export interface ServiceTypeDistribution {
-  service_type: string
-  total_orders: number
-  total_revenue: number
+const DATE_START_SUFFIX = "T00:00:00.000Z"
+const DATE_END_SUFFIX = "T23:59:59.999Z"
+
+function applyOrderFilters(query: any, restaurantId: string, filters?: ReportFilters) {
+  let filtered = query.eq("restaurant_id", restaurantId).eq("payment_status", "PAGO").neq("status", "CANCELADO")
+
+  if (filters?.date_from) {
+    filtered = filtered.gte("created_at", `${filters.date_from}${DATE_START_SUFFIX}`)
+  }
+  if (filters?.date_to) {
+    filtered = filtered.lte("created_at", `${filters.date_to}${DATE_END_SUFFIX}`)
+  }
+
+  return filtered
 }
 
 export async function getSalesMetrics(restaurantId: string, filters?: ReportFilters): Promise<SalesMetrics> {
   const supabase = await createClient()
 
-  let query = supabase
-    .from("orders")
-    .select("total, delivery_fee")
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "ENTREGUE") // Só pedidos concluídos
-
-  if (filters?.date_from) {
-    query = query.gte("created_at", filters.date_from)
-  }
-  if (filters?.date_to) {
-    query = query.lte("created_at", filters.date_to)
-  }
+  let query = supabase.from("orders").select("subtotal, delivery_fee")
+  query = applyOrderFilters(query, restaurantId, filters)
 
   const { data, error } = await query
 
@@ -61,10 +61,7 @@ export async function getSalesMetrics(restaurantId: string, filters?: ReportFilt
   const orders = data || []
   const total_orders = orders.length
   const total_delivery_fees = orders.reduce((sum, order) => sum + (Number(order.delivery_fee) || 0), 0)
-  const total_revenue = orders.reduce(
-    (sum, order) => sum + (Number(order.total) || 0) - (Number(order.delivery_fee) || 0),
-    0,
-  )
+  const total_revenue = orders.reduce((sum, order) => sum + (Number(order.subtotal) || 0), 0)
   const average_ticket = total_orders > 0 ? total_revenue / total_orders : 0
 
   return {
@@ -78,14 +75,8 @@ export async function getSalesMetrics(restaurantId: string, filters?: ReportFilt
 export async function getTopProducts(restaurantId: string, limit = 3, filters?: ReportFilters): Promise<TopProduct[]> {
   const supabase = await createClient()
 
-  let ordersQuery = supabase.from("orders").select("id").eq("restaurant_id", restaurantId).eq("status", "ENTREGUE")
-
-  if (filters?.date_from) {
-    ordersQuery = ordersQuery.gte("created_at", filters.date_from)
-  }
-  if (filters?.date_to) {
-    ordersQuery = ordersQuery.lte("created_at", filters.date_to)
-  }
+  let ordersQuery = supabase.from("orders").select("id")
+  ordersQuery = applyOrderFilters(ordersQuery, restaurantId, filters)
 
   const { data: orders, error: ordersError } = await ordersQuery
 
@@ -137,19 +128,10 @@ export async function getTopProducts(restaurantId: string, limit = 3, filters?: 
 export async function getDailySales(restaurantId: string, filters?: ReportFilters): Promise<DailySales[]> {
   const supabase = await createClient()
 
-  let query = supabase
-    .from("orders")
-    .select("created_at, total, delivery_fee")
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "ENTREGUE")
-    .order("created_at", { ascending: true })
-
-  if (filters?.date_from) {
-    query = query.gte("created_at", filters.date_from)
-  }
-  if (filters?.date_to) {
-    query = query.lte("created_at", filters.date_to)
-  }
+  let query = supabase.from("orders").select("created_at, subtotal, delivery_fee").order("created_at", {
+    ascending: true,
+  })
+  query = applyOrderFilters(query, restaurantId, filters)
 
   const { data, error } = await query
 
@@ -161,7 +143,7 @@ export async function getDailySales(restaurantId: string, filters?: ReportFilter
 
   data.forEach((order: any) => {
     const date = new Date(order.created_at).toISOString().split("T")[0]
-    const revenue = (Number(order.total) || 0) - (Number(order.delivery_fee) || 0)
+    const revenue = Number(order.subtotal) || 0
     const delivery_fee = Number(order.delivery_fee) || 0
 
     if (dailyMap.has(date)) {
@@ -191,18 +173,8 @@ export async function getChannelDistribution(
 ): Promise<ChannelDistribution[]> {
   const supabase = await createClient()
 
-  let query = supabase
-    .from("orders")
-    .select("channel, total, delivery_fee")
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "ENTREGUE")
-
-  if (filters?.date_from) {
-    query = query.gte("created_at", filters.date_from)
-  }
-  if (filters?.date_to) {
-    query = query.lte("created_at", filters.date_to)
-  }
+  let query = supabase.from("orders").select("tipo_pedido, subtotal")
+  query = applyOrderFilters(query, restaurantId, filters)
 
   const { data, error } = await query
 
@@ -213,8 +185,8 @@ export async function getChannelDistribution(
   const channelMap = new Map<string, { orders: number; revenue: number }>()
 
   data.forEach((order: any) => {
-    const channel = order.channel || "Não informado"
-    const revenue = (Number(order.total) || 0) - (Number(order.delivery_fee) || 0)
+    const channel = order.tipo_pedido || "Não informado"
+    const revenue = Number(order.subtotal) || 0
 
     if (channelMap.has(channel)) {
       const existing = channelMap.get(channel)!
@@ -227,53 +199,6 @@ export async function getChannelDistribution(
 
   return Array.from(channelMap.entries()).map(([channel, data]) => ({
     channel,
-    total_orders: data.orders,
-    total_revenue: data.revenue,
-  }))
-}
-
-export async function getServiceTypeDistribution(
-  restaurantId: string,
-  filters?: ReportFilters,
-): Promise<ServiceTypeDistribution[]> {
-  const supabase = await createClient()
-
-  let query = supabase
-    .from("orders")
-    .select("delivery_mode, total, delivery_fee")
-    .eq("restaurant_id", restaurantId)
-    .eq("status", "ENTREGUE")
-
-  if (filters?.date_from) {
-    query = query.gte("created_at", filters.date_from)
-  }
-  if (filters?.date_to) {
-    query = query.lte("created_at", filters.date_to)
-  }
-
-  const { data, error } = await query
-
-  if (error) throw error
-  if (!data) return []
-
-  // Agrupar por tipo de serviço
-  const serviceMap = new Map<string, { orders: number; revenue: number }>()
-
-  data.forEach((order: any) => {
-    const serviceType = order.delivery_mode || "Não informado"
-    const revenue = (Number(order.total) || 0) - (Number(order.delivery_fee) || 0)
-
-    if (serviceMap.has(serviceType)) {
-      const existing = serviceMap.get(serviceType)!
-      existing.orders += 1
-      existing.revenue += revenue
-    } else {
-      serviceMap.set(serviceType, { orders: 1, revenue })
-    }
-  })
-
-  return Array.from(serviceMap.entries()).map(([service_type, data]) => ({
-    service_type,
     total_orders: data.orders,
     total_revenue: data.revenue,
   }))

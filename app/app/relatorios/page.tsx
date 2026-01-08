@@ -42,11 +42,6 @@ interface ReportMetrics {
     total_orders: number
     total_revenue: number
   }>
-  serviceTypes: Array<{
-    service_type: string
-    total_orders: number
-    total_revenue: number
-  }>
 }
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"]
@@ -205,7 +200,7 @@ export default function RelatoriosPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.metrics.total_orders}</div>
-            <p className="text-xs text-muted-foreground">Pedidos concluídos</p>
+            <p className="text-xs text-muted-foreground">Pedidos pagos</p>
           </CardContent>
         </Card>
 
@@ -248,7 +243,7 @@ export default function RelatoriosPage() {
       </Card>
 
       {/* Melhores e Piores Dias */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-1">
         <Card>
           <CardHeader>
             <CardTitle>Melhor Dia</CardTitle>
@@ -315,12 +310,12 @@ export default function RelatoriosPage() {
         </CardContent>
       </Card>
 
-      {/* Distribuições */}
+      {/* Distribuição por tipo de pedido */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Por Canal</CardTitle>
-            <CardDescription>Distribuição de pedidos por origem</CardDescription>
+            <CardTitle>Por Tipo de Pedido</CardTitle>
+            <CardDescription>Distribuição de pedidos por modalidade</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -335,33 +330,6 @@ export default function RelatoriosPage() {
                   label
                 >
                   {data.channels.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Por Tipo de Serviço</CardTitle>
-            <CardDescription>Distribuição de pedidos por modalidade</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={data.serviceTypes}
-                  dataKey="total_orders"
-                  nameKey="service_type"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label
-                >
-                  {data.serviceTypes.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

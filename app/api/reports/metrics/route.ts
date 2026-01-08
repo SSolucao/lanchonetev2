@@ -4,7 +4,6 @@ import {
   getTopProducts,
   getDailySales,
   getChannelDistribution,
-  getServiceTypeDistribution,
 } from "@/src/services/reportsService"
 
 export async function GET(request: Request) {
@@ -23,12 +22,11 @@ export async function GET(request: Request) {
       date_to: dateTo || undefined,
     }
 
-    const [metrics, topProducts, dailySales, channels, serviceTypes] = await Promise.all([
+    const [metrics, topProducts, dailySales, channels] = await Promise.all([
       getSalesMetrics(restaurantId, filters),
       getTopProducts(restaurantId, 3, filters),
       getDailySales(restaurantId, filters),
       getChannelDistribution(restaurantId, filters),
-      getServiceTypeDistribution(restaurantId, filters),
     ])
 
     return NextResponse.json({
@@ -36,7 +34,6 @@ export async function GET(request: Request) {
       topProducts,
       dailySales,
       channels,
-      serviceTypes,
     })
   } catch (error) {
     console.error("[v0] Error fetching report metrics:", error)
