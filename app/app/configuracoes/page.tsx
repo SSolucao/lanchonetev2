@@ -63,6 +63,8 @@ export default function ConfiguracoesPage() {
   const [address, setAddress] = useState("")
   const [deliveryEtaMin, setDeliveryEtaMin] = useState("")
   const [deliveryEtaMax, setDeliveryEtaMax] = useState("")
+  const [pickupEtaMin, setPickupEtaMin] = useState("")
+  const [pickupEtaMax, setPickupEtaMax] = useState("")
   const [pixKeyType, setPixKeyType] = useState("")
   const [pixKey, setPixKey] = useState("")
 
@@ -148,6 +150,16 @@ export default function ConfiguracoesPage() {
             ? ""
             : String(restaurantData.delivery_eta_max),
         )
+        setPickupEtaMin(
+          restaurantData.consumption_eta_min === null || restaurantData.consumption_eta_min === undefined
+            ? ""
+            : String(restaurantData.consumption_eta_min),
+        )
+        setPickupEtaMax(
+          restaurantData.consumption_eta_max === null || restaurantData.consumption_eta_max === undefined
+            ? ""
+            : String(restaurantData.consumption_eta_max),
+        )
         setPixKeyType(restaurantData.pix_key_type || "")
         setPixKey(restaurantData.pix_key || "")
       }
@@ -202,6 +214,8 @@ export default function ConfiguracoesPage() {
     try {
       const etaMin = deliveryEtaMin.trim() === "" ? null : Number(deliveryEtaMin)
       const etaMax = deliveryEtaMax.trim() === "" ? null : Number(deliveryEtaMax)
+      const pickupMin = pickupEtaMin.trim() === "" ? null : Number(pickupEtaMin)
+      const pickupMax = pickupEtaMax.trim() === "" ? null : Number(pickupEtaMax)
 
       if (etaMin !== null && (!Number.isFinite(etaMin) || etaMin < 0 || !Number.isInteger(etaMin))) {
         alert("Tempo mínimo deve ser um número inteiro (minutos).")
@@ -213,6 +227,18 @@ export default function ConfiguracoesPage() {
       }
       if (etaMin !== null && etaMax !== null && etaMax < etaMin) {
         alert("Tempo máximo não pode ser menor que o tempo mínimo.")
+        return
+      }
+      if (pickupMin !== null && (!Number.isFinite(pickupMin) || pickupMin < 0 || !Number.isInteger(pickupMin))) {
+        alert("Tempo mínimo de retirada deve ser um número inteiro (minutos).")
+        return
+      }
+      if (pickupMax !== null && (!Number.isFinite(pickupMax) || pickupMax < 0 || !Number.isInteger(pickupMax))) {
+        alert("Tempo máximo de retirada deve ser um número inteiro (minutos).")
+        return
+      }
+      if (pickupMin !== null && pickupMax !== null && pickupMax < pickupMin) {
+        alert("Tempo máximo de retirada não pode ser menor que o tempo mínimo.")
         return
       }
 
@@ -275,6 +301,8 @@ export default function ConfiguracoesPage() {
           address,
           delivery_eta_min: etaMin,
           delivery_eta_max: etaMax,
+          consumption_eta_min: pickupMin,
+          consumption_eta_max: pickupMax,
           pix_key_type: normalizedPixKeyType,
           pix_key: normalizedPixKey,
         }),
@@ -623,6 +651,35 @@ export default function ConfiguracoesPage() {
                   {deliveryEtaMin && deliveryEtaMax
                     ? `Estimativa atual: ${deliveryEtaMin}–${deliveryEtaMax} min`
                     : "Defina uma estimativa para informar ao cliente (ex: 30–40 min)."}
+                </p>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Retirada</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tempo mínimo (min)</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={pickupEtaMin}
+                      onChange={(e) => setPickupEtaMin(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                      placeholder="Ex: 10"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tempo máximo (min)</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={pickupEtaMax}
+                      onChange={(e) => setPickupEtaMax(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                      placeholder="Ex: 20"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {pickupEtaMin && pickupEtaMax
+                    ? `Estimativa atual: ${pickupEtaMin}–${pickupEtaMax} min`
+                    : "Defina uma estimativa para retirada (ex: 10–20 min)."}
                 </p>
               </div>
 

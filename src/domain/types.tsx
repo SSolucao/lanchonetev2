@@ -17,6 +17,8 @@ export interface Restaurant {
   state: string | null
   delivery_eta_min: number | null
   delivery_eta_max: number | null
+  consumption_eta_min: number | null
+  consumption_eta_max: number | null
   pix_key_type: string | null
   pix_key: string | null
   created_at: string
@@ -218,6 +220,8 @@ export interface CreateRestaurantInput {
   state?: string | null
   delivery_eta_min?: number | null
   delivery_eta_max?: number | null
+  consumption_eta_min?: number | null
+  consumption_eta_max?: number | null
   pix_key_type?: string | null
   pix_key?: string | null
 }
