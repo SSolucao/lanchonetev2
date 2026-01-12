@@ -15,9 +15,17 @@ interface CustomerFormDialogProps {
   open: boolean
   customer: Customer | null
   onClose: (saved: boolean) => void
+  mode?: "full" | "minimal"
+  requireAddress?: boolean
 }
 
-export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDialogProps) {
+export function CustomerFormDialog({
+  open,
+  customer,
+  onClose,
+  mode = "full",
+  requireAddress = false,
+}: CustomerFormDialogProps) {
   const [loading, setLoading] = useState(false)
   const [loadingCEP, setLoadingCEP] = useState(false)
   const [name, setName] = useState("")
@@ -31,6 +39,7 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
   const [notes, setNotes] = useState("")
   const [deliveryFee, setDeliveryFee] = useState("")
   const [deliveryFeeTouched, setDeliveryFeeTouched] = useState(false)
+  const isMinimal = mode === "minimal"
 
   useEffect(() => {
     if (open && customer) {
@@ -97,14 +106,27 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
       return
     }
 
+    if (!phone) {
+      alert("Telefone é obrigatório")
+      return
+    }
+
+    if (
+      requireAddress &&
+      (!cep || !street || !number || !neighborhood || !city)
+    ) {
+      alert("Endereço completo é obrigatório para entrega")
+      return
+    }
+
     try {
       setLoading(true)
 
       let cleanPhone = phone ? unformatNumbers(phone) : null
       if (cleanPhone) {
-        if (!cleanPhone.startsWith("55")) {
-          cleanPhone = `55${cleanPhone}`
-        }
+      if (!cleanPhone.startsWith("55")) {
+        cleanPhone = `55${cleanPhone}`
+      }
       }
 
       const body: Record<string, any> = {
@@ -157,76 +179,81 @@ export function CustomerFormDialog({ open, customer, onClose }: CustomerFormDial
           </div>
 
           <div className="space-y-2">
-            <Label>Telefone</Label>
+            <Label>Telefone *</Label>
             <Input
               value={phone}
               onChange={(e) => setPhone(formatPhone(e.target.value))}
               placeholder="(11) 98765-4321"
               inputMode="numeric"
+              required
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>CEP</Label>
-              <Input
-                value={cep}
-                onChange={(e) => handleCEPChange(e.target.value)}
-                placeholder="12345-678"
-                inputMode="numeric"
-                disabled={loadingCEP}
-              />
-              {loadingCEP && <p className="text-xs text-muted-foreground">Buscando endereço...</p>}
-            </div>
-            <div className="space-y-2">
-              <Label>Cidade</Label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
-          </div>
+          {!isMinimal && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>CEP</Label>
+                  <Input
+                    value={cep}
+                    onChange={(e) => handleCEPChange(e.target.value)}
+                    placeholder="12345-678"
+                    inputMode="numeric"
+                    disabled={loadingCEP}
+                  />
+                  {loadingCEP && <p className="text-xs text-muted-foreground">Buscando endereço...</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Cidade</Label>
+                  <Input value={city} onChange={(e) => setCity(e.target.value)} />
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <Label>Rua</Label>
-            <Input value={street} onChange={(e) => setStreet(e.target.value)} />
-          </div>
+              <div className="space-y-2">
+                <Label>Rua</Label>
+                <Input value={street} onChange={(e) => setStreet(e.target.value)} />
+              </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Número</Label>
-              <Input value={number} onChange={(e) => setNumber(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Bairro</Label>
-              <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Número</Label>
+                  <Input value={number} onChange={(e) => setNumber(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Bairro</Label>
+                  <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <Label>Complemento</Label>
-            <Input value={complement} onChange={(e) => setComplement(e.target.value)} />
-          </div>
+              <div className="space-y-2">
+                <Label>Complemento</Label>
+                <Input value={complement} onChange={(e) => setComplement(e.target.value)} />
+              </div>
 
-          <div className="space-y-2">
-            <Label>Observações</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
-          </div>
+              <div className="space-y-2">
+                <Label>Observações</Label>
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+              </div>
 
-          <div className="space-y-2">
-            <Label>Taxa de entrega padrão (R$)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={deliveryFee}
-              onChange={(e) => {
-                setDeliveryFee(e.target.value)
-                setDeliveryFeeTouched(true)
-              }}
-              placeholder="Automático"
-            />
-            <p className="text-xs text-muted-foreground">
-              Se deixar em branco, o sistema calcula pela regra de bairro/distância quando o endereço mudar.
-            </p>
-          </div>
+              <div className="space-y-2">
+                <Label>Taxa de entrega padrão (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={deliveryFee}
+                  onChange={(e) => {
+                    setDeliveryFee(e.target.value)
+                    setDeliveryFeeTouched(true)
+                  }}
+                  placeholder="Automático"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Se deixar em branco, o sistema calcula pela regra de bairro/distância quando o endereço mudar.
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onClose(false)}>

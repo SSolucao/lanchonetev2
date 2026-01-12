@@ -6,7 +6,7 @@ import type { Customer, CreateCustomerInput } from "@/src/domain/types"
  */
 
 export interface CustomerFilters {
-  search?: string // Search by name or phone
+  search?: string // Search by phone
 }
 
 export async function listCustomers(restaurantId: string, filters?: CustomerFilters): Promise<Customer[]> {
@@ -14,7 +14,10 @@ export async function listCustomers(restaurantId: string, filters?: CustomerFilt
   let query = supabase.from("customers").select("*").eq("restaurant_id", restaurantId).eq("active", true) // Filter only active customers
 
   if (filters?.search) {
-    query = query.or(`name.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`)
+    const searchTerm = filters.search.replace(/\D/g, "")
+    if (searchTerm) {
+      query = query.ilike("phone", `%${searchTerm}%`)
+    }
   }
 
   const { data, error } = await query.order("name")
@@ -85,14 +88,17 @@ export async function searchCustomers(restaurantId: string, query: string): Prom
   }
 
   const supabase = await createClient()
-  const searchTerm = query.trim()
+  const searchTerm = query.trim().replace(/\D/g, "")
+  if (!searchTerm) {
+    return []
+  }
 
   const { data, error } = await supabase
     .from("customers")
     .select("*")
     .eq("restaurant_id", restaurantId)
     .eq("active", true) // Filter only active customers in search
-    .or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
+    .ilike("phone", `%${searchTerm}%`)
     .order("name")
     .limit(10)
 

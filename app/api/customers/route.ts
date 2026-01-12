@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
+    if (!body.name || !body.phone) {
+      return NextResponse.json({ error: "Name and phone are required" }, { status: 400 })
+    }
+
     let normalizedPhone = body.phone
     if (body.phone) {
       const normalized = normalizePhoneToInternational(body.phone)

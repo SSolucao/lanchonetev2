@@ -126,7 +126,8 @@ export default function PdvPage() {
   }
 
   useEffect(() => {
-    if (!customerSearchTerm || customerSearchTerm.trim().length < 2) {
+    const normalizedSearch = unformatNumbers(customerSearchTerm)
+    if (!normalizedSearch || normalizedSearch.length < 2) {
       setCustomerSearchResults([])
       return
     }
@@ -135,7 +136,7 @@ export default function PdvPage() {
       try {
         if (!restaurant) return
         const results = await fetch(
-          `/api/customers/search?restaurantId=${restaurant.id}&searchTerm=${customerSearchTerm}`,
+          `/api/customers/search?restaurantId=${restaurant.id}&searchTerm=${normalizedSearch}`,
         ).then((response) => response.json())
         setCustomerSearchResults(results)
       } catch (error) {
@@ -389,6 +390,23 @@ export default function PdvPage() {
         variant: "destructive",
         title: "Cliente obrigatório",
         description: "Selecione ou cadastre um cliente.",
+      })
+      return
+    }
+
+    const isDeliveryOrder = draft.tipoPedido === "ENTREGA"
+    if (
+      isDeliveryOrder &&
+      (!draft.customer.cep ||
+        !draft.customer.street ||
+        !draft.customer.number ||
+        !draft.customer.neighborhood ||
+        !draft.customer.city)
+    ) {
+      toast({
+        variant: "destructive",
+        title: "Endereço obrigatório",
+        description: "Para entrega, complete o cadastro com endereço.",
       })
       return
     }
@@ -824,7 +842,7 @@ export default function PdvPage() {
                   ) : (
                     <>
                       <Input
-                        placeholder="Buscar por nome ou telefone..."
+                        placeholder="Buscar por telefone..."
                         value={customerSearchTerm}
                         onChange={(e) => setCustomerSearchTerm(e.target.value)}
                       />
@@ -1113,6 +1131,8 @@ export default function PdvPage() {
       <CustomerFormDialog
         open={showNewCustomerForm}
         customer={null}
+        mode={isEntrega ? "full" : "minimal"}
+        requireAddress={isEntrega}
         onClose={(saved) => {
           setShowNewCustomerForm(false)
           if (saved) {

@@ -56,9 +56,14 @@ export default function ClientesPage() {
       return
     }
 
-    const term = searchTerm.toLowerCase()
+    const term = searchTerm.replace(/\D/g, "")
+    if (!term) {
+      setFilteredCustomers([])
+      return
+    }
+
     setFilteredCustomers(
-      customers.filter((c) => c.name.toLowerCase().includes(term) || c.phone?.toLowerCase().includes(term)),
+      customers.filter((c) => (c.phone || "").replace(/\D/g, "").includes(term)),
     )
   }
 
@@ -125,7 +130,7 @@ export default function ClientesPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nome ou telefone..."
+          placeholder="Buscar por telefone..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
