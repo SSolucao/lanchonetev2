@@ -210,6 +210,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No restaurant found" }, { status: statusCode })
     }
 
+    const cleanPhone = phone.replace(/\D/g, "")
+    const { data: existingCustomer } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("restaurant_id", restaurant.id)
+      .eq("phone", cleanPhone)
+      .single()
+
     if (cep && (!street || !neighborhood || !city)) {
       console.log("[v0] Buscando endereço via ViaCEP para CEP:", cep)
       try {
@@ -228,14 +236,42 @@ export async function POST(request: Request) {
       }
     }
 
-    let delivery_fee_default = 0
+    const cleanCEP = cep ? cep.replace(/\D/g, "") : null
+    const mergedCustomer = existingCustomer
+      ? {
+          cep: cleanCEP ?? existingCustomer.cep,
+          street: street || existingCustomer.street,
+          number: number || existingCustomer.number,
+          neighborhood: neighborhood || existingCustomer.neighborhood,
+          city: city || existingCustomer.city,
+        }
+      : {
+          cep: cleanCEP,
+          street,
+          number,
+          neighborhood,
+          city,
+        }
 
-    if (cep && street && neighborhood && city && restaurant.address) {
+    const hasAddressUpdate = [cep, street, number, neighborhood, city].some((value) => {
+      if (value === undefined || value === null) return false
+      return String(value).trim().length > 0
+    })
+    let delivery_fee_default = existingCustomer?.delivery_fee_default || 0
+    const hasCompleteAddress =
+      mergedCustomer.cep && mergedCustomer.street && mergedCustomer.number && mergedCustomer.neighborhood && mergedCustomer.city
+
+    if (hasCompleteAddress && restaurant.address && (!existingCustomer || hasAddressUpdate)) {
       console.log("[v0] Calculando taxa de entrega internamente...")
 
       try {
         // Montar endereço completo do cliente
-        const customerAddress = buildFullAddress(street, number, neighborhood, city)
+        const customerAddress = buildFullAddress(
+          mergedCustomer.street,
+          mergedCustomer.number,
+          mergedCustomer.neighborhood,
+          mergedCustomer.city,
+        )
 
         // Usar endereço do restaurante já cadastrado
         const restaurantAddress = restaurant.address
@@ -245,7 +281,12 @@ export async function POST(request: Request) {
           cliente: customerAddress,
         })
 
-        const feeResult = await calculateDeliveryFee(restaurant.id, restaurantAddress, customerAddress, neighborhood)
+        const feeResult = await calculateDeliveryFee(
+          restaurant.id,
+          restaurantAddress,
+          customerAddress,
+          mergedCustomer.neighborhood,
+        )
 
         if (feeResult.success) {
           delivery_fee_default = feeResult.fee || 0
@@ -262,25 +303,108 @@ export async function POST(request: Request) {
       }
     } else {
       console.log("[v0] Pulando cálculo de frete - dados incompletos:", {
-        temCep: !!cep,
-        temRua: !!street,
-        temBairro: !!neighborhood,
-        temCidade: !!city,
+        temCep: !!mergedCustomer.cep,
+        temRua: !!mergedCustomer.street,
+        temBairro: !!mergedCustomer.neighborhood,
+        temCidade: !!mergedCustomer.city,
         temEnderecoRestaurante: !!restaurant.address,
       })
     }
 
-    const cleanPhone = phone.replace(/\D/g, "")
-    const cleanCEP = cep ? cep.replace(/\D/g, "") : null
+    const trimmedStreet = street?.trim() || null
+    const trimmedNeighborhood = neighborhood?.trim() || null
+    const trimmedCity = city?.trim() || null
+    const trimmedNumber = number?.trim() || null
+    const trimmedComplement = complement?.trim() || null
+    const trimmedNotes = notes?.trim() || null
+
+    if (existingCustomer) {
+      console.log("[v0] Atualizando cliente com dados:", {
+        id: existingCustomer.id,
+        name,
+        phone: cleanPhone,
+        cep: cleanCEP,
+        street: trimmedStreet,
+        number: trimmedNumber,
+        neighborhood: trimmedNeighborhood,
+        city: trimmedCity,
+        delivery_fee_default,
+      })
+
+      const updates: Record<string, any> = {
+        name,
+        phone: cleanPhone,
+        delivery_fee_default,
+      }
+
+      if (cleanCEP) updates.cep = cleanCEP
+      if (trimmedStreet) updates.street = trimmedStreet
+      if (trimmedNumber) updates.number = trimmedNumber
+      if (trimmedNeighborhood) updates.neighborhood = trimmedNeighborhood
+      if (trimmedCity) updates.city = trimmedCity
+      if (trimmedComplement) updates.complement = trimmedComplement
+      if (trimmedNotes) updates.notes = trimmedNotes
+
+      const { data: customer, error } = await supabase
+        .from("customers")
+        .update(updates)
+        .eq("id", existingCustomer.id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const fullAddress = customer.street
+        ? `${customer.street}, ${customer.number || "s/n"} - ${customer.neighborhood}, ${customer.city}`
+        : null
+
+      console.log("[v0] Cliente atualizado com sucesso:", customer.id)
+
+      const response = {
+        success: true,
+        updated: true,
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          address: fullAddress,
+          delivery_fee: customer.delivery_fee_default || 0,
+        },
+        message:
+          customer.delivery_fee_default && customer.delivery_fee_default > 0
+            ? `Cadastro atualizado! Taxa de entrega: R$ ${customer.delivery_fee_default.toFixed(2)}`
+            : "Cadastro atualizado! Taxa de entrega não calculada (endereço incompleto)",
+        rule_applied: customer.delivery_fee_default && customer.delivery_fee_default > 0 ? "bairro ou km aplicado" : "nenhuma regra aplicada",
+      }
+
+      await logApiCall({
+        route: "/api/ai/customers",
+        method: "POST",
+        status_code: statusCode,
+        duration_ms: Date.now() - startedAt,
+        request_body: body,
+        response_body: response,
+        restaurant_id: restaurant.id,
+        customer_id: customer.id,
+        metadata: {
+          updated: true,
+          delivery_fee_default: customer.delivery_fee_default || 0,
+          cep: cleanCEP || null,
+          neighborhood: trimmedNeighborhood || null,
+        },
+      })
+
+      return NextResponse.json(response)
+    }
 
     console.log("[v0] Criando cliente com dados:", {
       name,
       phone: cleanPhone,
       cep: cleanCEP,
-      street,
-      number,
-      neighborhood,
-      city,
+      street: trimmedStreet,
+      number: trimmedNumber,
+      neighborhood: trimmedNeighborhood,
+      city: trimmedCity,
       delivery_fee_default,
     })
 
@@ -292,12 +416,12 @@ export async function POST(request: Request) {
         name,
         phone: cleanPhone,
         cep: cleanCEP,
-        street,
-        number,
-        neighborhood,
-        city,
-        complement,
-        notes,
+        street: trimmedStreet,
+        number: trimmedNumber,
+        neighborhood: trimmedNeighborhood,
+        city: trimmedCity,
+        complement: trimmedComplement,
+        notes: trimmedNotes,
         delivery_fee_default,
       })
       .select()
@@ -305,12 +429,15 @@ export async function POST(request: Request) {
 
     if (error) throw error
 
-    const fullAddress = street ? `${street}, ${number || "s/n"} - ${neighborhood}, ${city}` : null
+    const fullAddress = trimmedStreet
+      ? `${trimmedStreet}, ${trimmedNumber || "s/n"} - ${trimmedNeighborhood}, ${trimmedCity}`
+      : null
 
     console.log("[v0] Cliente criado com sucesso:", customer.id)
 
     const response = {
       success: true,
+      created: true,
       customer: {
         id: customer.id,
         name: customer.name,
@@ -335,9 +462,10 @@ export async function POST(request: Request) {
       restaurant_id: restaurant.id,
       customer_id: customer.id,
       metadata: {
+        created: true,
         delivery_fee_default,
-        cep: cep || null,
-        neighborhood: neighborhood || null,
+        cep: cleanCEP || null,
+        neighborhood: trimmedNeighborhood || null,
       },
     })
 
