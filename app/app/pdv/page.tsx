@@ -149,9 +149,12 @@ export default function PdvPage() {
     return () => clearTimeout(timer)
   }, [customerSearchTerm, restaurant])
 
+  const isBalcao = draft.tipoPedido === "BALCAO"
+  const availableProducts = isBalcao ? products.filter((p) => p.is_balcao) : products
+
   const categories = Array.from(
     new Set(
-      products
+      availableProducts
         .map((p) => p.category)
         .filter((c): c is string => Boolean(c && c.trim().length > 0))
         .map((c) => c.trim()),
@@ -160,13 +163,13 @@ export default function PdvPage() {
     .filter((c) => (categorySearch ? c.toLowerCase().includes(categorySearch.toLowerCase()) : true))
     .sort((a, b) => a.localeCompare(b))
 
-  const filteredProducts = products.filter((product) => {
+  const filteredProducts = availableProducts.filter((product) => {
     const matchesSearch = searchTerm.trim() === "" || product.name.toLowerCase().includes(searchTerm.toLowerCase().trim())
     const matchesCategory = !selectedCategory || product.category === selectedCategory
     return matchesSearch && matchesCategory
   })
 
-  const productsByCategory = products.reduce<Record<string, Product[]>>((acc, product) => {
+  const productsByCategory = availableProducts.reduce<Record<string, Product[]>>((acc, product) => {
     const cat = product.category || "Sem categoria"
     acc[cat] = acc[cat] || []
     acc[cat].push(product)
@@ -438,7 +441,7 @@ export default function PdvPage() {
         total,
         payment_method_id: draft.paymentMethodId,
         payment_status: "PAGO" as const,
-        status: "EM_PREPARO" as const,
+        status: (draft.tipoPedido === "BALCAO" ? "FINALIZADO" : "EM_PREPARO") as const,
         notes: draft.notes,
       }
 
@@ -600,20 +603,22 @@ export default function PdvPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <Card
-                    className="cursor-pointer transition-colors hover:bg-accent"
-                    onClick={() => {
-                      setSelectedCategory(null)
-                      setCategoryModal("Todos")
-                      setCategoryModalOpen(true)
-                      setSearchTerm("")
-                    }}
-                  >
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <span className="font-semibold">Todas</span>
-                      <span className="text-sm text-muted-foreground">{products.length} itens</span>
-                    </CardContent>
-                  </Card>
+                  {!isBalcao && (
+                    <Card
+                      className="cursor-pointer transition-colors hover:bg-accent"
+                      onClick={() => {
+                        setSelectedCategory(null)
+                        setCategoryModal("Todos")
+                        setCategoryModalOpen(true)
+                        setSearchTerm("")
+                      }}
+                    >
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <span className="font-semibold">Todas</span>
+                        <span className="text-sm text-muted-foreground">{products.length} itens</span>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {categories.map((cat) => (
                     <Card
@@ -650,65 +655,75 @@ export default function PdvPage() {
           {createdOrderId && createdOrderNumber ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-center">Pedido criado com sucesso!</CardTitle>
+                <CardTitle className="text-center">
+                  {draft.tipoPedido === "BALCAO" ? "Pedido finalizado!" : "Pedido criado com sucesso!"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="text-center py-4">
                   <p className="text-5xl font-bold text-green-600 mb-2">#{createdOrderNumber}</p>
-                  <p className="text-muted-foreground">Pedido registrado no sistema</p>
+                  <p className="text-muted-foreground">
+                    {draft.tipoPedido === "BALCAO"
+                      ? "Pedido finalizado e impresso automaticamente"
+                      : "Pedido registrado no sistema"}
+                  </p>
                 </div>
 
                 <div className="space-y-3">
-                  <Button
-                    className="w-full bg-transparent"
-                    size="lg"
-                    variant="outline"
-                    onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/duas-vias`, "_blank")}
-                  >
-                    Imprimir 2 vias (cozinha + balcão)
-                  </Button>
+                  {draft.tipoPedido !== "BALCAO" && (
+                    <>
+                      <Button
+                        className="w-full bg-transparent"
+                        size="lg"
+                        variant="outline"
+                        onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/duas-vias`, "_blank")}
+                      >
+                        Imprimir 2 vias (cozinha + balcão)
+                      </Button>
 
-                  <Button
-                    className="w-full bg-transparent"
-                    size="lg"
-                    variant="outline"
-                    onClick={async () => {
-                      if (!createdOrderId) return
-                      try {
-                        const res = await fetch(`/api/orders/${createdOrderId}/print-pdf`)
-                        if (!res.ok) throw new Error("Falha ao gerar PDF")
-                        const blob = await res.blob()
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement("a")
-                        a.href = url
-                        a.download = `pedido-${createdOrderId}.pdf`
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      } catch (err) {
-                        console.error("Erro ao baixar PDF:", err)
-                      }
-                    }}
-                  >
-                    Baixar PDF (2 vias)
-                  </Button>
+                      <Button
+                        className="w-full bg-transparent"
+                        size="lg"
+                        variant="outline"
+                        onClick={async () => {
+                          if (!createdOrderId) return
+                          try {
+                            const res = await fetch(`/api/orders/${createdOrderId}/print-pdf`)
+                            if (!res.ok) throw new Error("Falha ao gerar PDF")
+                            const blob = await res.blob()
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement("a")
+                            a.href = url
+                            a.download = `pedido-${createdOrderId}.pdf`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          } catch (err) {
+                            console.error("Erro ao baixar PDF:", err)
+                          }
+                        }}
+                      >
+                        Baixar PDF (2 vias)
+                      </Button>
 
-                  <Button
-                    className="w-full bg-transparent"
-                    size="lg"
-                    variant="outline"
-                    onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/cozinha`, "_blank")}
-                  >
-                    Imprimir cozinha
-                  </Button>
+                      <Button
+                        className="w-full bg-transparent"
+                        size="lg"
+                        variant="outline"
+                        onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/cozinha`, "_blank")}
+                      >
+                        Imprimir cozinha
+                      </Button>
 
-                  <Button
-                    className="w-full bg-transparent"
-                    size="lg"
-                    variant="outline"
-                    onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/cliente`, "_blank")}
-                  >
-                    Imprimir cliente
-                  </Button>
+                      <Button
+                        className="w-full bg-transparent"
+                        size="lg"
+                        variant="outline"
+                        onClick={() => window.open(`/app/pedidos/${createdOrderId}/print/cliente`, "_blank")}
+                      >
+                        Imprimir cliente
+                      </Button>
+                    </>
+                  )}
 
                   <Button className="w-full" size="lg" onClick={handleNewOrder}>
                     Novo pedido

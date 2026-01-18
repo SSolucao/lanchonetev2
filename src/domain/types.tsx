@@ -66,6 +66,7 @@ export interface Product {
   price: number
   description: string | null
   is_active: boolean
+  is_balcao?: boolean
   track_stock: boolean
   stock_qty: number
   low_stock_threshold: number
@@ -255,6 +256,7 @@ export interface CreateProductInput {
   price: number
   description?: string
   is_active?: boolean
+  is_balcao?: boolean
   track_stock?: boolean
   stock_qty?: number
   low_stock_threshold?: number

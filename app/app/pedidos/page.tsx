@@ -16,6 +16,7 @@ const STATUS_COLUMNS: Array<{ key: OrderStatus; label: string; color: string }> 
   { key: "NOVO", label: "Em análise", color: "bg-blue-200 dark:bg-blue-900/80" },
   { key: "EM_PREPARO", label: "Em produção", color: "bg-yellow-200 dark:bg-yellow-900/80" },
   { key: "SAIU_PARA_ENTREGA", label: "Pronto para entrega", color: "bg-purple-200 dark:bg-purple-900/80" },
+  { key: "FINALIZADO", label: "Finalizado", color: "bg-green-200 dark:bg-green-900/80" },
 ]
 
 export default function PedidosPage() {
@@ -153,7 +154,7 @@ export default function PedidosPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {ordersByStatus.map((column) => (
             <div key={column.key} className="flex flex-col min-h-[65vh] rounded-lg border overflow-hidden bg-card">
               <div className={`${column.color} px-4 py-2.5 flex items-center justify-between`}>

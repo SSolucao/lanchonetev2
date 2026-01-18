@@ -35,6 +35,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
   const [price, setPrice] = useState("")
   const [description, setDescription] = useState("")
   const [isActive, setIsActive] = useState(true)
+  const [isBalcao, setIsBalcao] = useState(false)
 
   // Combo items
   const [comboItems, setComboItems] = useState<ComboItem[]>([])
@@ -52,6 +53,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
         setPrice(product.price.toString())
         setDescription(product.description || "")
         setIsActive(product.is_active)
+        setIsBalcao(Boolean(product.is_balcao))
 
         if (product.id && product.type === "COMBO") {
           loadComboItems(product.id)
@@ -71,6 +73,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
     setPrice("")
     setDescription("")
     setIsActive(true)
+    setIsBalcao(false)
     setComboItems([])
     setSelectedProductId("")
     setSelectedQuantity("1")
@@ -156,6 +159,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
         price: Number.parseFloat(price),
         description: description || null,
         is_active: isActive,
+        is_balcao: isBalcao,
         combo_items:
           type === "COMBO"
             ? comboItems.map((item) => ({
@@ -265,6 +269,16 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
             />
             <Label htmlFor="is_active" className="cursor-pointer">
               Ativo
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="is_balcao"
+              checked={isBalcao}
+              onCheckedChange={(checked) => setIsBalcao(checked as boolean)}
+            />
+            <Label htmlFor="is_balcao" className="cursor-pointer">
+              Disponivel no Balcao
             </Label>
           </div>
 
