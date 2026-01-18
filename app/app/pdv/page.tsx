@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { usePdvOrder } from "@/src/hooks/usePdvOrder"
 import { Button } from "@/components/ui/button"
@@ -48,7 +48,8 @@ export default function PdvPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
   const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([])
-  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
+  const [showCustomerForm, setShowCustomerForm] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [isCalculatingFee, setIsCalculatingFee] = useState(false)
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
   const [loadingCEP, setLoadingCEP] = useState(false)
@@ -61,6 +62,7 @@ export default function PdvPage() {
   const [selectedAddons, setSelectedAddons] = useState<Record<string, number>>({})
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [categoryModal, setCategoryModal] = useState<string | null>(null)
+  const addressPromptedCustomerId = useRef<string | null>(null)
 
   const [newCustomerData, setNewCustomerData] = useState({
     name: "",
@@ -538,6 +540,33 @@ export default function PdvPage() {
     }
   }, [isEntrega, draft.customer, setDeliveryFee])
 
+  useEffect(() => {
+    if (!isEntrega) {
+      addressPromptedCustomerId.current = null
+      return
+    }
+
+    if (!draft.customer) return
+
+    const missingAddress =
+      !draft.customer.cep ||
+      !draft.customer.street ||
+      !draft.customer.number ||
+      !draft.customer.neighborhood ||
+      !draft.customer.city
+
+    if (!missingAddress) {
+      addressPromptedCustomerId.current = null
+      return
+    }
+
+    if (addressPromptedCustomerId.current === draft.customer.id) return
+
+    addressPromptedCustomerId.current = draft.customer.id
+    setEditingCustomer(draft.customer)
+    setShowCustomerForm(true)
+  }, [isEntrega, draft.customer])
+
   return (
     <>
       <div className="container mx-auto max-w-7xl px-6 py-6">
@@ -874,7 +903,10 @@ export default function PdvPage() {
                       <Button
                         variant="outline"
                         className="w-full bg-transparent"
-                        onClick={() => setShowNewCustomerForm(true)}
+                        onClick={() => {
+                          setEditingCustomer(null)
+                          setShowCustomerForm(true)
+                        }}
                       >
                         Novo cliente
                       </Button>
@@ -1129,12 +1161,18 @@ export default function PdvPage() {
       </Dialog>
 
       <CustomerFormDialog
-        open={showNewCustomerForm}
-        customer={null}
+        open={showCustomerForm}
+        customer={editingCustomer}
         mode={isEntrega ? "full" : "minimal"}
         requireAddress={isEntrega}
+        onSaved={(savedCustomer) => {
+          setCustomer(savedCustomer)
+          setCustomerSearchTerm("")
+          setCustomerSearchResults([])
+        }}
         onClose={(saved) => {
-          setShowNewCustomerForm(false)
+          setShowCustomerForm(false)
+          setEditingCustomer(null)
           if (saved) {
             setCustomerSearchTerm("")
           }

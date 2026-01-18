@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { listCustomers, createCustomer } from "@/src/services/customersService"
+import { listCustomers, createCustomer, getCustomerByPhone } from "@/src/services/customersService"
 import { getCurrentRestaurant } from "@/src/services/restaurantsService"
 import { calculateDeliveryFee } from "@/src/services/deliveryFeeService"
 import { normalizePhoneToInternational } from "@/lib/format-utils"
@@ -38,6 +38,11 @@ export async function POST(request: NextRequest) {
       if (normalized) {
         normalizedPhone = normalized
       }
+    }
+
+    const existingCustomer = await getCustomerByPhone(restaurant.id, normalizedPhone)
+    if (existingCustomer) {
+      return NextResponse.json({ error: "Telefone já cadastrado" }, { status: 409 })
     }
 
     let deliveryFee = body.delivery_fee_default || 0

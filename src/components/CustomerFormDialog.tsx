@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ interface CustomerFormDialogProps {
   open: boolean
   customer: Customer | null
   onClose: (saved: boolean) => void
+  onSaved?: (customer: Customer) => void
   mode?: "full" | "minimal"
   requireAddress?: boolean
 }
@@ -23,6 +24,7 @@ export function CustomerFormDialog({
   open,
   customer,
   onClose,
+  onSaved,
   mode = "full",
   requireAddress = false,
 }: CustomerFormDialogProps) {
@@ -40,6 +42,8 @@ export function CustomerFormDialog({
   const [deliveryFee, setDeliveryFee] = useState("")
   const [deliveryFeeTouched, setDeliveryFeeTouched] = useState(false)
   const isMinimal = mode === "minimal"
+  const lastFeeKey = useRef<string | null>(null)
+  const feeRequest = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (open && customer) {
@@ -56,6 +60,14 @@ export function CustomerFormDialog({
         typeof customer.delivery_fee_default === "number" ? customer.delivery_fee_default.toFixed(2) : "",
       )
       setDeliveryFeeTouched(false)
+      const feeKey = [
+        customer.cep ? unformatNumbers(customer.cep) : "",
+        customer.street || "",
+        customer.number || "",
+        customer.neighborhood || "",
+        customer.city || "",
+      ].join("|")
+      lastFeeKey.current = customer.cep ? feeKey : null
     } else if (open) {
       resetForm()
     }
@@ -73,6 +85,7 @@ export function CustomerFormDialog({
     setNotes("")
     setDeliveryFee("")
     setDeliveryFeeTouched(false)
+    lastFeeKey.current = null
   }
 
   async function handleCEPChange(value: string) {
@@ -97,6 +110,51 @@ export function CustomerFormDialog({
       }
     }
   }
+
+  useEffect(() => {
+    if (isMinimal || deliveryFeeTouched) return
+    const cleanCEP = unformatNumbers(cep)
+    if (cleanCEP.length !== 8 || !street || !number || !neighborhood || !city) return
+
+    const feeKey = [cleanCEP, street, number, neighborhood, city].join("|")
+    if (lastFeeKey.current === feeKey) return
+
+    const timer = setTimeout(async () => {
+      if (feeRequest.current) {
+        feeRequest.current.abort()
+      }
+      const controller = new AbortController()
+      feeRequest.current = controller
+
+      try {
+        const response = await fetch("/api/customers/preview-delivery-fee", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cep: cleanCEP,
+            street,
+            number,
+            neighborhood,
+            city,
+          }),
+          signal: controller.signal,
+        })
+
+        if (!response.ok) return
+        const data = await response.json()
+        if (data?.success) {
+          lastFeeKey.current = feeKey
+          setDeliveryFee(Number(data.fee || 0).toFixed(2))
+        }
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.error("Error previewing delivery fee:", error)
+        }
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [cep, street, number, neighborhood, city, isMinimal, deliveryFeeTouched])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -154,11 +212,26 @@ export function CustomerFormDialog({
         body: JSON.stringify(body),
       })
 
-      if (!response.ok) throw new Error("Failed to save customer")
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        if (response.status === 409) {
+          throw new Error("PHONE_EXISTS")
+        }
+        throw new Error(errorBody?.error || "Failed to save customer")
+      }
+
+      const savedCustomer = await response.json().catch(() => null)
+      if (savedCustomer) {
+        onSaved?.(savedCustomer)
+      }
 
       onClose(true)
     } catch (error) {
       console.error("Error saving customer:", error)
+      if (error instanceof Error && error.message === "PHONE_EXISTS") {
+        alert("Já existe um cliente com este telefone.")
+        return
+      }
       alert("Erro ao salvar cliente")
     } finally {
       setLoading(false)

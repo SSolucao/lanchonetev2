@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCustomerById, updateCustomer, deleteCustomer } from "@/src/services/customersService"
+import { getCustomerById, updateCustomer, deleteCustomer, getCustomerByPhone } from "@/src/services/customersService"
 import { calculateDeliveryFee, buildFullAddress } from "@/src/services/deliveryFeeService"
 import { getFirstRestaurant } from "@/src/services/restaurantsService"
 import { normalizePhoneToInternational } from "@/lib/format-utils"
@@ -35,6 +35,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const existingCustomer = await getCustomerById(id)
     if (!existingCustomer) {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 })
+    }
+
+    if (body.phone) {
+      const duplicateCustomer = await getCustomerByPhone(existingCustomer.restaurant_id, body.phone, id)
+      if (duplicateCustomer) {
+        return NextResponse.json({ error: "Telefone já cadastrado" }, { status: 409 })
+      }
     }
 
     const addressChanged =

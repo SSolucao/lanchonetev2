@@ -106,21 +106,40 @@ export async function searchCustomers(restaurantId: string, query: string): Prom
   return data as Customer[]
 }
 
-export async function getCustomerByPhone(restaurantId: string, phone: string): Promise<Customer | null> {
+export async function getCustomerByPhone(
+  restaurantId: string,
+  phone: string,
+  excludeCustomerId?: string,
+): Promise<Customer | null> {
   const supabase = await createClient()
-  const cleanPhone = phone.replace(/\D/g, "") // Remove non-digits
+  const cleanPhone = phone.replace(/\D/g, "")
+  if (!cleanPhone) return null
 
-  const { data, error } = await supabase
+  const variants = new Set<string>([cleanPhone])
+
+  if (cleanPhone.startsWith("55") && (cleanPhone.length === 12 || cleanPhone.length === 13)) {
+    variants.add(cleanPhone.slice(2))
+  } else if (cleanPhone.length === 10 || cleanPhone.length === 11) {
+    variants.add(`55${cleanPhone}`)
+  }
+
+  let query = supabase
     .from("customers")
     .select("*")
     .eq("restaurant_id", restaurantId)
-    .eq("phone", cleanPhone)
-    .eq("active", true) // Filter only active customers when searching by phone
-    .single()
+    .eq("active", true)
+    .in("phone", Array.from(variants))
+    .limit(1)
+
+  if (excludeCustomerId) {
+    query = query.neq("id", excludeCustomerId)
+  }
+
+  const { data, error } = await query
 
   if (error) {
-    if (error.code === "PGRST116") return null
     throw error
   }
-  return data as Customer
+
+  return (data?.[0] as Customer) ?? null
 }

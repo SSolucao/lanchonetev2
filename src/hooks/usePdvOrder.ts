@@ -113,7 +113,7 @@ export function usePdvOrder() {
           ...prev,
           tipoPedido,
           deliveryFee: 0,
-          customer: tipoPedido === "BALCAO" ? null : prev.customer,
+          customer: prev.customer,
         }
       }
       return { ...prev, tipoPedido }
