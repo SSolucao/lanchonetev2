@@ -21,6 +21,8 @@ export interface Restaurant {
   consumption_eta_max: number | null
   pix_key_type: string | null
   pix_key: string | null
+  pix_bank_name: string | null
+  pix_account_holder: string | null
   created_at: string
   updated_at: string
 }
@@ -226,6 +228,8 @@ export interface CreateRestaurantInput {
   consumption_eta_max?: number | null
   pix_key_type?: string | null
   pix_key?: string | null
+  pix_bank_name?: string | null
+  pix_account_holder?: string | null
 }
 
 export interface CreateUserInput {

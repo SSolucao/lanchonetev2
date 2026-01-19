@@ -38,6 +38,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       delivery_eta_max: restaurant.delivery_eta_max ?? null,
       consumption_eta_min: restaurant.consumption_eta_min ?? null,
       consumption_eta_max: restaurant.consumption_eta_max ?? null,
+      pix_bank_name: restaurant.pix_bank_name ?? null,
+      pix_account_holder: restaurant.pix_account_holder ?? null,
       payment_methods: paymentMethods || [],
     }
 

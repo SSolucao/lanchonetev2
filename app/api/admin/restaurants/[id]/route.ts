@@ -53,6 +53,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       consumption_eta_max: restaurant.consumption_eta_max ?? null,
       pix_key_type: restaurant.pix_key_type ?? null,
       pix_key: restaurant.pix_key ?? null,
+      pix_bank_name: restaurant.pix_bank_name ?? null,
+      pix_account_holder: restaurant.pix_account_holder ?? null,
       payment_methods: paymentMethods || [],
     }
 

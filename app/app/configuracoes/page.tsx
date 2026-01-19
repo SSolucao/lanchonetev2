@@ -67,6 +67,8 @@ export default function ConfiguracoesPage() {
   const [pickupEtaMax, setPickupEtaMax] = useState("")
   const [pixKeyType, setPixKeyType] = useState("")
   const [pixKey, setPixKey] = useState("")
+  const [pixBankName, setPixBankName] = useState("")
+  const [pixAccountHolder, setPixAccountHolder] = useState("")
 
   const charsetOptions = [
     { label: "Português (CP860)", encoding: "CP860", codePage: 3 },
@@ -162,6 +164,8 @@ export default function ConfiguracoesPage() {
         )
         setPixKeyType(restaurantData.pix_key_type || "")
         setPixKey(restaurantData.pix_key || "")
+        setPixBankName(restaurantData.pix_bank_name || "")
+        setPixAccountHolder(restaurantData.pix_account_holder || "")
       }
 
       if (paymentRes.ok) {
@@ -291,6 +295,9 @@ export default function ConfiguracoesPage() {
         }
       }
 
+      const normalizedPixBankName = pixBankName.trim() === "" ? null : pixBankName.trim()
+      const normalizedPixAccountHolder = pixAccountHolder.trim() === "" ? null : pixAccountHolder.trim()
+
       setSaving(true)
       const response = await fetch("/api/restaurant", {
         method: "PUT",
@@ -305,6 +312,8 @@ export default function ConfiguracoesPage() {
           consumption_eta_max: pickupMax,
           pix_key_type: normalizedPixKeyType,
           pix_key: normalizedPixKey,
+          pix_bank_name: normalizedPixBankName,
+          pix_account_holder: normalizedPixAccountHolder,
         }),
       })
 
@@ -740,6 +749,22 @@ export default function ConfiguracoesPage() {
                       {pixKeyType === "CNPJ" && "CNPJ: 14 dígitos, apenas números."}
                       {pixKeyType === "RANDOM" && "Chave aleatória: código gerado pelo banco (evite espaços)."}
                     </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Banco (nome)</Label>
+                    <Input
+                      value={pixBankName}
+                      onChange={(e) => setPixBankName(e.target.value)}
+                      placeholder="Ex: Banco do Brasil"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Titular da conta</Label>
+                    <Input
+                      value={pixAccountHolder}
+                      onChange={(e) => setPixAccountHolder(e.target.value)}
+                      placeholder="Ex: Alan Gomes"
+                    />
                   </div>
                 </div>
               </div>
