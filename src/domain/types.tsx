@@ -67,6 +67,7 @@ export interface Product {
   description: string | null
   is_active: boolean
   is_balcao?: boolean
+  url_image?: string | null
   track_stock: boolean
   stock_qty: number
   low_stock_threshold: number
@@ -257,6 +258,7 @@ export interface CreateProductInput {
   description?: string
   is_active?: boolean
   is_balcao?: boolean
+  url_image?: string | null
   track_stock?: boolean
   stock_qty?: number
   low_stock_threshold?: number

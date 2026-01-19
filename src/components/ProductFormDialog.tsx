@@ -12,7 +12,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Product } from "@/src/domain/types"
 import { Plus, X } from "lucide-react"
-import { useAuth } from "@/src/context/AuthContext"
 
 interface ProductFormDialogProps {
   open: boolean
@@ -27,7 +26,6 @@ interface ComboItem {
 }
 
 export function ProductFormDialog({ open, product, onClose }: ProductFormDialogProps) {
-  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [type, setType] = useState<"UNIT" | "COMBO">("UNIT")
   const [name, setName] = useState("")
@@ -36,6 +34,8 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
   const [description, setDescription] = useState("")
   const [isActive, setIsActive] = useState(true)
   const [isBalcao, setIsBalcao] = useState(false)
+  const [imageUrl, setImageUrl] = useState("")
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
 
   // Combo items
   const [comboItems, setComboItems] = useState<ComboItem[]>([])
@@ -54,6 +54,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
         setDescription(product.description || "")
         setIsActive(product.is_active)
         setIsBalcao(Boolean(product.is_balcao))
+        setImageUrl(product.url_image || "")
 
         if (product.id && product.type === "COMBO") {
           loadComboItems(product.id)
@@ -74,9 +75,43 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
     setDescription("")
     setIsActive(true)
     setIsBalcao(false)
+    setImageUrl("")
     setComboItems([])
     setSelectedProductId("")
     setSelectedQuantity("1")
+  }
+
+  async function handleImageChange(file?: File) {
+    if (!file) return
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      alert("Formato de imagem nao suportado. Use PNG, JPG ou WEBP.")
+      return
+    }
+    try {
+      setIsUploadingImage(true)
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const response = await fetch("/api/products/upload-image", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body?.error || "Falha ao enviar imagem")
+      }
+
+      const data = await response.json()
+      if (data?.url) {
+        setImageUrl(data.url)
+      }
+    } catch (error) {
+      console.error("Error uploading product image:", error)
+      alert("Erro ao enviar imagem. Tente novamente.")
+    } finally {
+      setIsUploadingImage(false)
+    }
   }
 
   async function loadAvailableProducts() {
@@ -160,6 +195,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
         description: description || null,
         is_active: isActive,
         is_balcao: isBalcao,
+        url_image: imageUrl || null,
         combo_items:
           type === "COMBO"
             ? comboItems.map((item) => ({
@@ -259,6 +295,27 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
           <div className="space-y-2">
             <Label>Descrição</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Imagem do produto (para IA)</Label>
+            <Input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => handleImageChange(e.target.files?.[0])}
+              disabled={isUploadingImage}
+            />
+            {imageUrl && (
+              <div className="flex items-center gap-2 text-sm">
+                <a className="text-primary underline" href={imageUrl} target="_blank" rel="noreferrer">
+                  Ver imagem atual
+                </a>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setImageUrl("")}>
+                  Remover
+                </Button>
+              </div>
+            )}
+            {isUploadingImage && <p className="text-xs text-muted-foreground">Enviando imagem...</p>}
           </div>
 
           <div className="flex items-center space-x-2">
