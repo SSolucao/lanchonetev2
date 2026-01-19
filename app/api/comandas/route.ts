@@ -7,8 +7,9 @@ export async function GET(request: NextRequest) {
     const restaurant = await getCurrentRestaurant()
     const searchParams = request.nextUrl.searchParams
     const status = searchParams.get("status") as "ABERTA" | "FECHADA" | null
+    const date = searchParams.get("date") || undefined
 
-    const comandas = await listComandas(restaurant.id, status || undefined)
+    const comandas = await listComandas(restaurant.id, status || undefined, date)
 
     return NextResponse.json(comandas)
   } catch (error: any) {

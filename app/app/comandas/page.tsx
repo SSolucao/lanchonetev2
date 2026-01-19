@@ -74,6 +74,7 @@ export default function ComandasPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().slice(0, 10))
 
   const [mesa, setMesa] = useState("")
   const [customerName, setCustomerName] = useState("")
@@ -106,10 +107,12 @@ export default function ComandasPage() {
     fetchAddons()
   }, [])
 
-  const fetchComandas = async () => {
+  const fetchComandas = async (date = dateFilter) => {
     setIsLoading(true)
     try {
-      const res = await fetch("/api/comandas")
+      const params = new URLSearchParams()
+      if (date) params.set("date", date)
+      const res = await fetch(`/api/comandas?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
         setComandas(data)
@@ -501,6 +504,21 @@ export default function ComandasPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="date_filter" className="text-sm text-muted-foreground">
+              Dia
+            </Label>
+            <Input
+              id="date_filter"
+              type="date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value)
+                fetchComandas(e.target.value)
+              }}
+              className="w-[160px]"
+            />
+          </div>
           <Button onClick={fetchComandas} disabled={isLoading} variant="outline" size="sm">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar

@@ -48,8 +48,17 @@ export interface FecharComandaInput {
   payment_method_id: string
 }
 
-export async function listComandas(restaurantId: string, status?: "ABERTA" | "FECHADA"): Promise<Comanda[]> {
+export async function listComandas(
+  restaurantId: string,
+  status?: "ABERTA" | "FECHADA",
+  date?: string,
+): Promise<Comanda[]> {
   const supabase = await createClient()
+
+  const today = date ? new Date(date) : new Date()
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const endOfDay = new Date(startOfDay)
+  endOfDay.setDate(startOfDay.getDate() + 1)
 
   let query = supabase
     .from("comandas")
@@ -58,6 +67,8 @@ export async function listComandas(restaurantId: string, status?: "ABERTA" | "FE
       customer:customers(id, name, phone)
     `)
     .eq("restaurant_id", restaurantId)
+    .gte("opened_at", startOfDay.toISOString())
+    .lt("opened_at", endOfDay.toISOString())
 
   if (status) {
     query = query.eq("status", status)
