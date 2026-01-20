@@ -55,7 +55,13 @@ export async function listComandas(
 ): Promise<Comanda[]> {
   const supabase = await createClient()
 
-  const today = date ? new Date(date) : new Date()
+  const today = date
+    ? (() => {
+        const [year, month, day] = date.split("-").map((value) => Number.parseInt(value, 10))
+        if (!year || !month || !day) return new Date()
+        return new Date(year, month - 1, day)
+      })()
+    : new Date()
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const endOfDay = new Date(startOfDay)
   endOfDay.setDate(startOfDay.getDate() + 1)

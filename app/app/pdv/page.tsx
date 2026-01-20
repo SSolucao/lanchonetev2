@@ -56,6 +56,13 @@ export default function PdvPage() {
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null)
   const [createdOrderNumber, setCreatedOrderNumber] = useState<number | null>(null)
   const [comanda, setComanda] = useState<any>(null)
+  const [openComandas, setOpenComandas] = useState<any[]>([])
+  const [isLoadingComandas, setIsLoadingComandas] = useState(false)
+  const [selectedComandaId, setSelectedComandaId] = useState<string | null>(null)
+  const [isComandaDialogOpen, setIsComandaDialogOpen] = useState(false)
+  const [newComandaMesa, setNewComandaMesa] = useState("")
+  const [newComandaCustomerName, setNewComandaCustomerName] = useState("")
+  const [isCreatingComanda, setIsCreatingComanda] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [itemQuantity, setItemQuantity] = useState(1)
   const [itemNotes, setItemNotes] = useState("")
@@ -126,6 +133,39 @@ export default function PdvPage() {
       })
     }
   }
+
+  const fetchOpenComandas = useCallback(async () => {
+    try {
+      setIsLoadingComandas(true)
+      const res = await fetch("/api/comandas?status=ABERTA")
+      if (!res.ok) {
+        throw new Error("Falha ao carregar comandas")
+      }
+      const data = await res.json()
+      setOpenComandas(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error("[v0] Error loading open comandas:", error)
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar comandas",
+        description: "Não foi possível listar comandas abertas.",
+      })
+    } finally {
+      setIsLoadingComandas(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    if (!comandaId && draft.tipoPedido === "BALCAO") {
+      fetchOpenComandas()
+    }
+  }, [comandaId, draft.tipoPedido, fetchOpenComandas])
+
+  useEffect(() => {
+    if (draft.tipoPedido !== "BALCAO" && selectedComandaId) {
+      setSelectedComandaId(null)
+    }
+  }, [draft.tipoPedido, selectedComandaId])
 
   useEffect(() => {
     const normalizedSearch = unformatNumbers(customerSearchTerm)
@@ -370,6 +410,54 @@ export default function PdvPage() {
     }
   }, [restaurant, newCustomerData, setCustomer, toast])
 
+  const handleCreateComanda = useCallback(async () => {
+    if (!newComandaMesa.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Mesa obrigatória",
+        description: "Informe o número ou identificação da mesa.",
+      })
+      return
+    }
+
+    setIsCreatingComanda(true)
+    try {
+      const res = await fetch("/api/comandas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mesa: newComandaMesa.trim(),
+          customer_name: newComandaCustomerName.trim() || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || "Falha ao criar comanda")
+      }
+
+      const created = await res.json()
+      setSelectedComandaId(created?.id || null)
+      setNewComandaMesa("")
+      setNewComandaCustomerName("")
+      setIsComandaDialogOpen(false)
+      fetchOpenComandas()
+      toast({
+        title: "Comanda criada",
+        description: "Comanda aberta e vinculada ao pedido.",
+      })
+    } catch (error) {
+      console.error("[v0] Error creating comanda:", error)
+      toast({
+        variant: "destructive",
+        title: "Erro ao criar comanda",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+      })
+    } finally {
+      setIsCreatingComanda(false)
+    }
+  }, [fetchOpenComandas, newComandaCustomerName, newComandaMesa, toast])
+
   const handleConfirmOrder = useCallback(async () => {
     if (!restaurant) {
       toast({
@@ -380,6 +468,9 @@ export default function PdvPage() {
       return
     }
 
+    const effectiveComandaId = comandaId || selectedComandaId
+    const isComandaFlow = Boolean(effectiveComandaId)
+
     if (draft.items.length === 0) {
       toast({
         variant: "destructive",
@@ -389,7 +480,7 @@ export default function PdvPage() {
       return
     }
 
-    if (!draft.customer) {
+    if (!draft.customer && !isComandaFlow) {
       toast({
         variant: "destructive",
         title: "Cliente obrigatório",
@@ -415,7 +506,7 @@ export default function PdvPage() {
       return
     }
 
-    if (!draft.paymentMethodId) {
+    if (!draft.paymentMethodId && !isComandaFlow) {
       toast({
         variant: "destructive",
         title: "Forma de pagamento",
@@ -426,26 +517,6 @@ export default function PdvPage() {
 
     setIsCreatingOrder(true)
     try {
-      const responseOrderNumber = await fetch(`/api/orders/next-number?restaurantId=${restaurant.id}`)
-      const orderNumber = await responseOrderNumber.json()
-
-      const requiresKitchen = draft.items.some((item) => Boolean(item.product.requires_kitchen))
-
-      const orderInput = {
-        restaurant_id: restaurant.id,
-        order_number: orderNumber,
-        tipo_pedido: draft.tipoPedido,
-        customer_id: draft.customer?.id,
-        comanda_id: comandaId || undefined,
-        subtotal,
-        delivery_fee: draft.deliveryFee,
-        total,
-        payment_method_id: draft.paymentMethodId,
-        payment_status: "PAGO" as const,
-        status: (requiresKitchen ? "EM_PREPARO" : "FINALIZADO") as const,
-        notes: draft.notes,
-      }
-
       const itemsInput = draft.items.map((item) => {
         const addonsTotal = item.addons.reduce((sum, ad) => sum + ad.price * ad.quantity, 0)
         const total_price = (item.product.price + addonsTotal) * item.quantity
@@ -460,13 +531,54 @@ export default function PdvPage() {
         }
       })
 
-      const responseCreateOrder = await fetch("/api/orders/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ orderInput, itemsInput }),
-      })
+      let responseCreateOrder: Response
+
+      if (isComandaFlow && effectiveComandaId) {
+        const itemsPayload = itemsInput.map((item) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          notes: item.notes || null,
+          addons: item.addons,
+        }))
+
+        responseCreateOrder = await fetch("/api/comandas/order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            comanda_id: effectiveComandaId,
+            items: itemsPayload,
+          }),
+        })
+      } else {
+        const responseOrderNumber = await fetch(`/api/orders/next-number?restaurantId=${restaurant.id}`)
+        const orderNumber = await responseOrderNumber.json()
+
+        const requiresKitchen = draft.items.some((item) => Boolean(item.product.requires_kitchen))
+
+        const orderInput = {
+          restaurant_id: restaurant.id,
+          order_number: orderNumber,
+          tipo_pedido: draft.tipoPedido,
+          customer_id: draft.customer?.id,
+          subtotal,
+          delivery_fee: draft.deliveryFee,
+          total,
+          payment_method_id: draft.paymentMethodId,
+          payment_status: "PAGO" as const,
+          status: (requiresKitchen ? "EM_PREPARO" : "FINALIZADO") as const,
+          notes: draft.notes,
+        }
+
+        responseCreateOrder = await fetch("/api/orders/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ orderInput, itemsInput }),
+        })
+      }
 
       if (!responseCreateOrder.ok) {
         const body = await responseCreateOrder.json().catch(() => ({}))
@@ -528,13 +640,15 @@ export default function PdvPage() {
     } finally {
       setIsCreatingOrder(false)
     }
-  }, [restaurant, draft, subtotal, total, clearDraft, toast, comandaId])
+  }, [restaurant, draft, subtotal, total, clearDraft, toast, comandaId, selectedComandaId])
 
   const handleNewOrder = () => {
     setCreatedOrderId(null)
     setCreatedOrderNumber(null)
   }
 
+  const effectiveComandaId = comandaId || selectedComandaId
+  const isComandaFlow = Boolean(effectiveComandaId)
   const isEntrega = draft.tipoPedido === "ENTREGA"
 
   // Sempre que seleciona cliente ou muda para entrega, aplica taxa padrão do cliente
@@ -852,6 +966,59 @@ export default function PdvPage() {
                   )}
                 </div>
 
+                {draft.tipoPedido === "BALCAO" && !comandaId && (
+                  <div className="space-y-2 border-t pt-3">
+                    <Label>Comanda (opcional)</Label>
+                    <div className="flex flex-col gap-2">
+                      <Select
+                        value={selectedComandaId || "none"}
+                        onValueChange={(value) => {
+                          if (value === "none") {
+                            setSelectedComandaId(null)
+                            return
+                          }
+                          setSelectedComandaId(value)
+                          const selected = openComandas.find((c) => c.id === value)
+                          if (selected?.customer) {
+                            setCustomer(selected.customer)
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma comanda" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Pedido rápido (sem comanda)</SelectItem>
+                          {openComandas.length === 0 && (
+                            <SelectItem value="empty" disabled>
+                              {isLoadingComandas ? "Carregando comandas..." : "Nenhuma comanda aberta"}
+                            </SelectItem>
+                          )}
+                          {openComandas.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {`Comanda #${String(c.numero).padStart(3, "0")} - Mesa ${c.mesa}${
+                                c.customer_name ? ` (${c.customer_name})` : ""
+                              }`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        className="w-full bg-transparent"
+                        onClick={() => setIsComandaDialogOpen(true)}
+                      >
+                        Criar comanda
+                      </Button>
+                    </div>
+                    {selectedComandaId && (
+                      <p className="text-xs text-muted-foreground">
+                        Pedido será vinculado à comanda selecionada.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Cliente</label>
                   {draft.customer ? (
@@ -945,21 +1112,23 @@ export default function PdvPage() {
                   </div>
                 )}
 
-                <div className="space-y-3 border-t pt-3">
-                  <Label htmlFor="payment-method">Forma de pagamento</Label>
-                  <Select value={draft.paymentMethodId || ""} onValueChange={setPaymentMethod}>
-                    <SelectTrigger id="payment-method">
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {paymentMethods.map((method) => (
-                        <SelectItem key={method.id} value={method.id}>
-                          {method.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isComandaFlow && (
+                  <div className="space-y-3 border-t pt-3">
+                    <Label htmlFor="payment-method">Forma de pagamento</Label>
+                    <Select value={draft.paymentMethodId || ""} onValueChange={setPaymentMethod}>
+                      <SelectTrigger id="payment-method">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paymentMethods.map((method) => (
+                          <SelectItem key={method.id} value={method.id}>
+                            {method.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="space-y-3 border-t pt-3">
                   <Label htmlFor="order-notes">Observações do pedido</Label>
@@ -989,7 +1158,12 @@ export default function PdvPage() {
                   className="w-full"
                   size="lg"
                   onClick={handleConfirmOrder}
-                  disabled={draft.items.length === 0 || !draft.customer || !draft.paymentMethodId || isCreatingOrder}
+                  disabled={
+                    draft.items.length === 0 ||
+                    (!draft.customer && !isComandaFlow) ||
+                    (!draft.paymentMethodId && !isComandaFlow) ||
+                    isCreatingOrder
+                  }
                 >
                   <CheckCircle className="mr-2 h-5 w-5" />
                   {isCreatingOrder ? "Criando pedido..." : "Confirmar pedido"}
@@ -1059,6 +1233,42 @@ export default function PdvPage() {
               {filteredProducts.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground col-span-full">Nenhum produto encontrado</div>
               )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isComandaDialogOpen} onOpenChange={setIsComandaDialogOpen}>
+        <DialogContent className="max-w-md w-[95vw]">
+          <DialogHeader>
+            <DialogTitle>Nova comanda</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="comanda-mesa">Mesa</Label>
+              <Input
+                id="comanda-mesa"
+                placeholder="Ex: 12"
+                value={newComandaMesa}
+                onChange={(e) => setNewComandaMesa(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="comanda-customer">Nome (opcional)</Label>
+              <Input
+                id="comanda-customer"
+                placeholder="Ex: João"
+                value={newComandaCustomerName}
+                onChange={(e) => setNewComandaCustomerName(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsComandaDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCreateComanda} disabled={isCreatingComanda}>
+                {isCreatingComanda ? "Criando..." : "Criar comanda"}
+              </Button>
             </div>
           </div>
         </DialogContent>

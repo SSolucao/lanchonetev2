@@ -107,11 +107,12 @@ export default function ComandasPage() {
     fetchAddons()
   }, [])
 
-  const fetchComandas = async (date = dateFilter) => {
+  const fetchComandas = async (date: string = dateFilter) => {
+    const normalizedDate = typeof date === "string" ? date : dateFilter
     setIsLoading(true)
     try {
       const params = new URLSearchParams()
-      if (date) params.set("date", date)
+      if (normalizedDate) params.set("date", normalizedDate)
       const res = await fetch(`/api/comandas?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
@@ -519,7 +520,18 @@ export default function ComandasPage() {
               className="w-[160px]"
             />
           </div>
-          <Button onClick={fetchComandas} disabled={isLoading} variant="outline" size="sm">
+          <Button
+            onClick={() => {
+              const today = new Date().toISOString().slice(0, 10)
+              setDateFilter(today)
+              fetchComandas(today)
+            }}
+            variant="outline"
+            size="sm"
+          >
+            Hoje
+          </Button>
+          <Button onClick={() => fetchComandas()} disabled={isLoading} variant="outline" size="sm">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>

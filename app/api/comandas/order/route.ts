@@ -78,6 +78,11 @@ export async function POST(request: NextRequest) {
         unit_price: product.price,
         total_price: itemTotal,
         notes: item.notes || null,
+        addons:
+          item.addons?.map((addon: any) => ({
+            addon_id: addon.addon_id,
+            quantity: addon.quantity,
+          })) || [],
       }
     })
 
@@ -113,7 +118,7 @@ export async function POST(request: NextRequest) {
     }).catch((error) => console.error("[v0] Error notifying EM_PREPARO on comanda create:", error))
 
     // Atualizar total da comanda
-    const newTotal = comanda.total + total
+    const newTotal = comanda.total + (Number(order.total) || 0)
     const { error: updateError } = await supabase.from("comandas").update({ total: newTotal }).eq("id", comanda_id)
 
     if (updateError) {
