@@ -41,6 +41,7 @@ export default function ConfiguracoesPage() {
   const [sendCustomerPdf, setSendCustomerPdf] = useState(false)
   const [isListingPrinters, setIsListingPrinters] = useState(false)
   const [isTestingPrint, setIsTestingPrint] = useState(false)
+  const [printerSaveMessage, setPrinterSaveMessage] = useState<string | null>(null)
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [modalities, setModalities] = useState({
@@ -71,9 +72,9 @@ export default function ConfiguracoesPage() {
   const [pixAccountHolder, setPixAccountHolder] = useState("")
 
   const charsetOptions = [
-    { label: "Português (CP860)", encoding: "CP860", codePage: 3 },
-    { label: "Multilíngue (CP850)", encoding: "CP850", codePage: 2 },
-    { label: "Windows-1252", encoding: "CP1252", codePage: 16 },
+    { label: "Português (recomendado)", encoding: "CP860", codePage: 3 },
+    { label: "Multilíngue (alternativo)", encoding: "CP850", codePage: 2 },
+    { label: "Windows (compatível)", encoding: "CP1252", codePage: 16 },
   ]
 
   // Payment methods
@@ -368,9 +369,36 @@ export default function ConfiguracoesPage() {
     footerText,
   ])
 
+  const handleSavePrinterConfig = () => {
+    if (typeof window === "undefined") return
+    const config = {
+      selectedPrinter,
+      autoPrint,
+      vias,
+      encoding,
+      codePage,
+      sendCustomerPdf,
+    }
+    const model = {
+      selectedCategories,
+      modalities,
+      showHeader,
+      showCustomer,
+      showPayment,
+      showObservations,
+      showValues,
+      width,
+      footerText,
+    }
+    localStorage.setItem("printerConfig", JSON.stringify(config))
+    localStorage.setItem("printerModelConfig", JSON.stringify(model))
+    setPrinterSaveMessage("Configurações salvas.")
+    window.setTimeout(() => setPrinterSaveMessage(null), 2000)
+  }
+
   const ensureQzConnection = async () => {
     const qz = (typeof window !== "undefined" && (window as any).qz) || null
-    if (!qz) throw new Error("QZ Tray não carregado. Verifique a instalação.")
+    if (!qz) throw new Error("Aplicativo de impressão não carregado. Verifique a instalação.")
     if (!qz.websocket.isActive()) {
       await qz.websocket.connect()
     }
@@ -384,7 +412,7 @@ export default function ConfiguracoesPage() {
       const list = await qz.printers.find()
       setPrinters(list || [])
     } catch (err: any) {
-      alert(err?.message || "Erro ao listar impressoras. Certifique-se de que o QZ Tray está aberto.")
+      alert(err?.message || "Erro ao listar impressoras. Certifique-se de que o app de impressão está aberto.")
     } finally {
       setIsListingPrinters(false)
     }
@@ -944,7 +972,7 @@ export default function ConfiguracoesPage() {
           <div className="border rounded-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">Impressão (QZ Tray)</h2>
+                <h2 className="text-xl font-semibold">Impressão</h2>
                 <p className="text-sm text-muted-foreground">Configure o modelo do cupom, filtros e teste.</p>
               </div>
               <div className="flex flex-col gap-2 text-sm">
@@ -961,7 +989,7 @@ export default function ConfiguracoesPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6">
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Impressora padrão</Label>
                     <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
@@ -970,7 +998,9 @@ export default function ConfiguracoesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {printers.length === 0 && (
-                          <SelectItem value="__none__">{isListingPrinters ? "Carregando..." : "Nenhuma encontrada"}</SelectItem>
+                          <SelectItem value="__none__">
+                            {isListingPrinters ? "Carregando..." : "Nenhuma encontrada"}
+                          </SelectItem>
                         )}
                         {printers.map((p) => (
                           <SelectItem key={p} value={p}>
@@ -984,53 +1014,55 @@ export default function ConfiguracoesPage() {
                     </Button>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Número de vias</Label>
-                    <Input
-                      inputMode="numeric"
-                      value={vias}
-                      onChange={(e) => setVias(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
-                      placeholder="Ex: 2"
-                    />
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Número de vias</Label>
+                      <Input
+                        inputMode="numeric"
+                        value={vias}
+                        onChange={(e) => setVias(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+                        placeholder="Ex: 2"
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label>Largura</Label>
-                    <Select value={width} onValueChange={(v) => setWidth(v as "32" | "48")}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="32">32 col</SelectItem>
-                        <SelectItem value="48">48 col</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="space-y-2">
+                      <Label>Largura</Label>
+                      <Select value={width} onValueChange={(v) => setWidth(v as "32" | "48")}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="32">58 mm</SelectItem>
+                          <SelectItem value="48">80 mm</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label>Acentos</Label>
-                    <Select
-                      value={encoding}
-                      onValueChange={(value) => {
-                        setEncoding(value)
-                        const option = charsetOptions.find((opt) => opt.encoding === value)
-                        if (option) setCodePage(option.codePage)
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {charsetOptions.map((opt) => (
-                          <SelectItem key={opt.encoding} value={opt.encoding}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Se os acentos saírem errados, teste outra opção.
-                    </p>
+                    <div className="space-y-2">
+                      <Label>Caracteres especiais</Label>
+                      <Select
+                        value={encoding}
+                        onValueChange={(value) => {
+                          setEncoding(value)
+                          const option = charsetOptions.find((opt) => opt.encoding === value)
+                          if (option) setCodePage(option.codePage)
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {charsetOptions.map((opt) => (
+                            <SelectItem key={opt.encoding} value={opt.encoding}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Se os acentos saírem errados, escolha outra opção.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -1123,7 +1155,10 @@ export default function ConfiguracoesPage() {
                       rows={2}
                     />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" onClick={handleSavePrinterConfig}>
+                      Salvar configurações
+                    </Button>
                     <Button variant="outline" onClick={handleListPrinters} disabled={isListingPrinters}>
                       {isListingPrinters ? "Listando..." : "Atualizar impressoras"}
                     </Button>
@@ -1131,8 +1166,9 @@ export default function ConfiguracoesPage() {
                       {isTestingPrint ? "Imprimindo..." : "Imprimir teste"}
                     </Button>
                   </div>
+                  {printerSaveMessage && <p className="text-xs text-muted-foreground">{printerSaveMessage}</p>}
                   <p className="text-xs text-muted-foreground">
-                    Deixe o QZ Tray aberto e autorize o site uma vez (marque “Remember this decision”).
+                    Mantenha o aplicativo de impressão aberto e autorize o site na primeira vez.
                   </p>
                 </div>
               </div>

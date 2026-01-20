@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { listCustomers, createCustomer, getCustomerByPhone } from "@/src/services/customersService"
+import { listCustomers, createCustomer, getCustomerByPhone, findCustomersByName } from "@/src/services/customersService"
 import { getCurrentRestaurant } from "@/src/services/restaurantsService"
 import { calculateDeliveryFee } from "@/src/services/deliveryFeeService"
 import { normalizePhoneToInternational } from "@/lib/format-utils"
@@ -40,9 +40,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const allowDuplicateName = Boolean(body.allow_duplicate_name)
+
     const existingCustomer = await getCustomerByPhone(restaurant.id, normalizedPhone)
     if (existingCustomer) {
       return NextResponse.json({ error: "Telefone já cadastrado" }, { status: 409 })
+    }
+
+    if (!allowDuplicateName) {
+      const nameMatches = await findCustomersByName(restaurant.id, String(body.name || ""))
+      if (nameMatches.length > 0) {
+        return NextResponse.json({ error: "NAME_EXISTS", matches: nameMatches }, { status: 409 })
+      }
     }
 
     let deliveryFee = body.delivery_fee_default || 0

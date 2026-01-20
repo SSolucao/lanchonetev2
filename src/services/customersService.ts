@@ -88,19 +88,43 @@ export async function searchCustomers(restaurantId: string, query: string): Prom
   }
 
   const supabase = await createClient()
-  const searchTerm = query.trim().replace(/\D/g, "")
-  if (!searchTerm) {
-    return []
-  }
+  const trimmed = query.trim()
+  const digitsOnly = trimmed.replace(/\D/g, "")
 
-  const { data, error } = await supabase
+  let queryBuilder = supabase
     .from("customers")
     .select("*")
     .eq("restaurant_id", restaurantId)
-    .eq("active", true) // Filter only active customers in search
-    .ilike("phone", `%${searchTerm}%`)
+    .eq("active", true)
     .order("name")
     .limit(10)
+
+  if (digitsOnly && digitsOnly.length >= 2 && digitsOnly.length === trimmed.length) {
+    queryBuilder = queryBuilder.ilike("phone", `%${digitsOnly}%`)
+  } else {
+    queryBuilder = queryBuilder.ilike("name", `%${trimmed}%`)
+  }
+
+  const { data, error } = await queryBuilder
+
+  if (error) throw error
+  return data as Customer[]
+}
+
+export async function findCustomersByName(restaurantId: string, name: string): Promise<Customer[]> {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return []
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, name, phone")
+    .eq("restaurant_id", restaurantId)
+    .eq("active", true)
+    .ilike("name", trimmed)
+    .limit(5)
 
   if (error) throw error
   return data as Customer[]

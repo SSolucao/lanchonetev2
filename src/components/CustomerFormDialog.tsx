@@ -41,6 +41,8 @@ export function CustomerFormDialog({
   const [notes, setNotes] = useState("")
   const [deliveryFee, setDeliveryFee] = useState("")
   const [deliveryFeeTouched, setDeliveryFeeTouched] = useState(false)
+  const [nameConflictOpen, setNameConflictOpen] = useState(false)
+  const [nameConflictMatches, setNameConflictMatches] = useState<Customer[]>([])
   const isMinimal = mode === "minimal"
   const lastFeeKey = useRef<string | null>(null)
   const feeRequest = useRef<AbortController | null>(null)
@@ -156,9 +158,7 @@ export function CustomerFormDialog({
     return () => clearTimeout(timer)
   }, [cep, street, number, neighborhood, city, isMinimal, deliveryFeeTouched])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-
+  const submitForm = async (allowDuplicateName = false) => {
     if (!name) {
       alert("Nome é obrigatório")
       return
@@ -197,6 +197,7 @@ export function CustomerFormDialog({
         city: city || null,
         complement: complement || null,
         notes: notes || null,
+        allow_duplicate_name: allowDuplicateName,
       }
 
       if (deliveryFeeTouched && deliveryFee !== "") {
@@ -214,6 +215,11 @@ export function CustomerFormDialog({
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}))
+        if (response.status === 409 && errorBody?.error === "NAME_EXISTS") {
+          setNameConflictMatches(Array.isArray(errorBody?.matches) ? errorBody.matches : [])
+          setNameConflictOpen(true)
+          return
+        }
         if (response.status === 409) {
           throw new Error("PHONE_EXISTS")
         }
@@ -238,14 +244,21 @@ export function CustomerFormDialog({
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={() => onClose(false)}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{customer ? "Editar" : "Novo"} Cliente</DialogTitle>
-        </DialogHeader>
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+    await submitForm()
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={() => onClose(false)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{customer ? "Editar" : "Novo"} Cliente</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Nome *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required />
@@ -336,8 +349,45 @@ export function CustomerFormDialog({
               {loading ? "Salvando..." : "Salvar"}
             </Button>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={nameConflictOpen} onOpenChange={setNameConflictOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nome já cadastrado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>Já existe um cliente com esse nome. Deseja continuar mesmo assim?</p>
+            {nameConflictMatches.length > 0 && (
+              <div className="rounded-md border bg-muted/30 p-3">
+                {nameConflictMatches.map((match) => (
+                  <div key={match.id} className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{match.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {match.phone ? formatPhone(match.phone) : "Sem telefone"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setNameConflictOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              onClick={async () => {
+                setNameConflictOpen(false)
+                await submitForm(true)
+              }}
+              disabled={loading}
+            >
+              Salvar mesmo assim
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
