@@ -259,7 +259,7 @@ export default function ProdutosPage() {
                     <th className="text-left p-3 font-medium">Nome</th>
                     <th className="text-left p-3 font-medium">Tipo</th>
                     <th className="text-left p-3 font-medium">Categoria</th>
-                    <th className="text-center p-3 font-medium">Balcão</th>
+                    <th className="text-center p-3 font-medium">Cozinha</th>
                     <th className="text-right p-3 font-medium">Preço</th>
                     <th className="text-center p-3 font-medium">Status</th>
                     <th className="text-center p-3 font-medium">Ações</th>
@@ -284,7 +284,7 @@ export default function ProdutosPage() {
                     <td className="p-3">{product.type === "UNIT" ? "Produto" : "Combo"}</td>
                     <td className="p-3">{product.category || "—"}</td>
                     <td className="p-3 text-center">
-                      {product.is_balcao ? (
+                      {product.requires_kitchen ? (
                         <Badge variant="secondary" className="text-xs">
                           Sim
                         </Badge>

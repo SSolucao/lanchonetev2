@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const productIds = items.map((item: any) => item.product_id)
     const { data: products, error: productsError } = await supabase
       .from("products")
-      .select("id, price, name")
+      .select("id, price, name, requires_kitchen")
       .in("id", productIds)
 
     if (productsError) {
@@ -58,10 +58,15 @@ export async function POST(request: NextRequest) {
 
     // Calcular total e preparar items
     let total = 0
+    let requiresKitchen = false
     const orderItems = items.map((item: any) => {
       const product = productMap.get(item.product_id)
       if (!product) {
         throw new Error(`Produto não encontrado: ${item.product_id}`)
+      }
+
+      if (product.requires_kitchen) {
+        requiresKitchen = true
       }
 
       const itemTotal = product.price * item.quantity
@@ -93,7 +98,7 @@ export async function POST(request: NextRequest) {
       subtotal: total,
       delivery_fee: 0,
       total: total,
-      status: "EM_PREPARO" as const,
+      status: (requiresKitchen ? "EM_PREPARO" : "FINALIZADO") as const,
       payment_status: "PENDENTE" as const,
       payment_method_id: null,
       notes: null,

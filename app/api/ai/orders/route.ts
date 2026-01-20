@@ -305,6 +305,7 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
         name,
         category,
         price,
+        requires_kitchen,
         product_addons:product_addons(
           addon:addons(id, name, price, is_active)
         )
@@ -354,9 +355,8 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
       }, {})
     }
 
-    const productMap = new Map(
-      (productsData || []).map((p: any) => [p.id, p]),
-    )
+    const productMap = new Map((productsData || []).map((p: any) => [p.id, p]))
+    const requiresKitchen = (productsData || []).some((p: any) => Boolean(p.requires_kitchen))
 
     for (const item of parsedItems) {
       const product = productMap.get(item.product_id)
@@ -450,7 +450,7 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
       customer_id: customer.id,
       tipo_pedido: finalTipoPedido,
       channel: "AGENTE",
-      status: "NOVO" as const,
+      status: (requiresKitchen ? "NOVO" : "FINALIZADO") as const,
       subtotal,
       delivery_fee: deliveryFee,
       total,

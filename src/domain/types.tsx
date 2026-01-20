@@ -68,7 +68,7 @@ export interface Product {
   price: number
   description: string | null
   is_active: boolean
-  is_balcao?: boolean
+  requires_kitchen?: boolean
   url_image?: string | null
   track_stock: boolean
   stock_qty: number
@@ -261,7 +261,7 @@ export interface CreateProductInput {
   price: number
   description?: string
   is_active?: boolean
-  is_balcao?: boolean
+  requires_kitchen?: boolean
   url_image?: string | null
   track_stock?: boolean
   stock_qty?: number

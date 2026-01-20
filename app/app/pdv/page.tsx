@@ -149,8 +149,7 @@ export default function PdvPage() {
     return () => clearTimeout(timer)
   }, [customerSearchTerm, restaurant])
 
-  const isBalcao = draft.tipoPedido === "BALCAO"
-  const availableProducts = isBalcao ? products.filter((p) => p.is_balcao) : products
+  const availableProducts = products
 
   const categories = Array.from(
     new Set(
@@ -430,6 +429,8 @@ export default function PdvPage() {
       const responseOrderNumber = await fetch(`/api/orders/next-number?restaurantId=${restaurant.id}`)
       const orderNumber = await responseOrderNumber.json()
 
+      const requiresKitchen = draft.items.some((item) => Boolean(item.product.requires_kitchen))
+
       const orderInput = {
         restaurant_id: restaurant.id,
         order_number: orderNumber,
@@ -441,7 +442,7 @@ export default function PdvPage() {
         total,
         payment_method_id: draft.paymentMethodId,
         payment_status: "PAGO" as const,
-        status: (draft.tipoPedido === "BALCAO" ? "FINALIZADO" : "EM_PREPARO") as const,
+        status: (requiresKitchen ? "EM_PREPARO" : "FINALIZADO") as const,
         notes: draft.notes,
       }
 
@@ -603,22 +604,20 @@ export default function PdvPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {!isBalcao && (
-                    <Card
-                      className="cursor-pointer transition-colors hover:bg-accent"
-                      onClick={() => {
-                        setSelectedCategory(null)
-                        setCategoryModal("Todos")
-                        setCategoryModalOpen(true)
-                        setSearchTerm("")
-                      }}
-                    >
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <span className="font-semibold">Todas</span>
-                        <span className="text-sm text-muted-foreground">{products.length} itens</span>
-                      </CardContent>
-                    </Card>
-                  )}
+                  <Card
+                    className="cursor-pointer transition-colors hover:bg-accent"
+                    onClick={() => {
+                      setSelectedCategory(null)
+                      setCategoryModal("Todos")
+                      setCategoryModalOpen(true)
+                      setSearchTerm("")
+                    }}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <span className="font-semibold">Todas</span>
+                      <span className="text-sm text-muted-foreground">{products.length} itens</span>
+                    </CardContent>
+                  </Card>
 
                   {categories.map((cat) => (
                     <Card

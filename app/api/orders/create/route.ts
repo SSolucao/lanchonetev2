@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createOrderWithItems } from "@/src/services/ordersService"
+import { createClient } from "@/lib/supabase/server"
 import { notifyOrderEnteredEmPreparo } from "@/src/services/orderStatusEvents"
 import type { CreateOrderInput, CreateOrderItemInput } from "@/src/domain/types"
 
@@ -25,7 +26,21 @@ export async function POST(request: Request) {
       }
     }
 
-    const result = await createOrderWithItems(orderInput, itemsInput)
+    const supabase = await createClient()
+    const productIds = Array.from(new Set(itemsInput.map((item) => item.product_id)))
+    const { data: productsData, error: productsError } = await supabase
+      .from("products")
+      .select("id, requires_kitchen")
+      .in("id", productIds)
+
+    if (productsError) throw productsError
+
+    const requiresKitchen = (productsData || []).some((product: any) => Boolean(product.requires_kitchen))
+    const normalizedOrderInput = requiresKitchen
+      ? orderInput
+      : { ...orderInput, status: "FINALIZADO" as const }
+
+    const result = await createOrderWithItems(normalizedOrderInput, itemsInput)
 
     if (result.order.status === "EM_PREPARO") {
       notifyOrderEnteredEmPreparo({

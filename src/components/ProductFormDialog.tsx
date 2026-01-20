@@ -33,7 +33,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
   const [price, setPrice] = useState("")
   const [description, setDescription] = useState("")
   const [isActive, setIsActive] = useState(true)
-  const [isBalcao, setIsBalcao] = useState(false)
+  const [requiresKitchen, setRequiresKitchen] = useState(false)
   const [imageUrl, setImageUrl] = useState("")
   const [isUploadingImage, setIsUploadingImage] = useState(false)
 
@@ -53,7 +53,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
         setPrice(product.price.toString())
         setDescription(product.description || "")
         setIsActive(product.is_active)
-        setIsBalcao(Boolean(product.is_balcao))
+        setRequiresKitchen(Boolean(product.requires_kitchen))
         setImageUrl(product.url_image || "")
 
         if (product.id && product.type === "COMBO") {
@@ -74,7 +74,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
     setPrice("")
     setDescription("")
     setIsActive(true)
-    setIsBalcao(false)
+    setRequiresKitchen(false)
     setImageUrl("")
     setComboItems([])
     setSelectedProductId("")
@@ -194,7 +194,7 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
         price: Number.parseFloat(price),
         description: description || null,
         is_active: isActive,
-        is_balcao: isBalcao,
+        requires_kitchen: requiresKitchen,
         url_image: imageUrl || null,
         combo_items:
           type === "COMBO"
@@ -330,12 +330,12 @@ export function ProductFormDialog({ open, product, onClose }: ProductFormDialogP
           </div>
           <div className="flex items-center space-x-2">
             <Checkbox
-              id="is_balcao"
-              checked={isBalcao}
-              onCheckedChange={(checked) => setIsBalcao(checked as boolean)}
+              id="requires_kitchen"
+              checked={requiresKitchen}
+              onCheckedChange={(checked) => setRequiresKitchen(checked as boolean)}
             />
-            <Label htmlFor="is_balcao" className="cursor-pointer">
-              Disponivel no Balcao
+            <Label htmlFor="requires_kitchen" className="cursor-pointer">
+              Precisa cozinha
             </Label>
           </div>
 
