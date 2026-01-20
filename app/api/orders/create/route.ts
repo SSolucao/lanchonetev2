@@ -36,9 +36,9 @@ export async function POST(request: Request) {
     if (productsError) throw productsError
 
     const requiresKitchen = (productsData || []).some((product: any) => Boolean(product.requires_kitchen))
-    const normalizedOrderInput = requiresKitchen
-      ? orderInput
-      : { ...orderInput, status: "FINALIZADO" as const }
+    const needsWorkflow = orderInput.tipo_pedido === "ENTREGA" || orderInput.tipo_pedido === "RETIRADA"
+    const normalizedOrderInput =
+      requiresKitchen || needsWorkflow ? orderInput : { ...orderInput, status: "FINALIZADO" as const }
 
     const result = await createOrderWithItems(normalizedOrderInput, itemsInput)
 

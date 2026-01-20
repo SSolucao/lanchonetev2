@@ -556,6 +556,7 @@ export default function PdvPage() {
         const orderNumber = await responseOrderNumber.json()
 
         const requiresKitchen = draft.items.some((item) => Boolean(item.product.requires_kitchen))
+        const needsWorkflow = draft.tipoPedido === "ENTREGA" || draft.tipoPedido === "RETIRADA"
 
         const orderInput = {
           restaurant_id: restaurant.id,
@@ -567,7 +568,7 @@ export default function PdvPage() {
           total,
           payment_method_id: draft.paymentMethodId,
           payment_status: "PAGO" as const,
-          status: (requiresKitchen ? "EM_PREPARO" : "FINALIZADO") as const,
+          status: (requiresKitchen || needsWorkflow ? "EM_PREPARO" : "FINALIZADO") as const,
           notes: draft.notes,
         }
 
