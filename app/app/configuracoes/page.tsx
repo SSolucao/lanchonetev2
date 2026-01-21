@@ -38,6 +38,7 @@ export default function ConfiguracoesPage() {
   const [vias, setVias] = useState("2")
   const [encoding, setEncoding] = useState("CP860")
   const [codePage, setCodePage] = useState(3)
+  const [cutAfterPrint, setCutAfterPrint] = useState(false)
   const [sendCustomerPdf, setSendCustomerPdf] = useState(false)
   const [isListingPrinters, setIsListingPrinters] = useState(false)
   const [isTestingPrint, setIsTestingPrint] = useState(false)
@@ -104,6 +105,7 @@ export default function ConfiguracoesPage() {
         setVias(parsed.vias ? String(parsed.vias) : "2")
         setEncoding(typeof parsed.encoding === "string" && parsed.encoding ? parsed.encoding : "CP860")
         setCodePage(Number.isFinite(Number(parsed.codePage)) ? Number(parsed.codePage) : 3)
+        setCutAfterPrint(Boolean(parsed.cutAfterPrint))
         setSendCustomerPdf(Boolean(parsed.sendCustomerPdf))
       } catch (err) {
         console.warn("Não foi possível carregar configuração de impressora", err)
@@ -338,10 +340,11 @@ export default function ConfiguracoesPage() {
       vias,
       encoding,
       codePage,
+      cutAfterPrint,
       sendCustomerPdf,
     }
     localStorage.setItem("printerConfig", JSON.stringify(config))
-  }, [selectedPrinter, autoPrint, vias, encoding, codePage, sendCustomerPdf])
+  }, [selectedPrinter, autoPrint, vias, encoding, codePage, cutAfterPrint, sendCustomerPdf])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -377,6 +380,7 @@ export default function ConfiguracoesPage() {
       vias,
       encoding,
       codePage,
+      cutAfterPrint,
       sendCustomerPdf,
     }
     const model = {
@@ -979,6 +983,10 @@ export default function ConfiguracoesPage() {
                 <label className="flex items-center gap-2">
                   <Checkbox checked={autoPrint} onCheckedChange={(v) => setAutoPrint(Boolean(v))} />
                   Imprimir automaticamente ao entrar em produção
+                </label>
+                <label className="flex items-center gap-2">
+                  <Checkbox checked={cutAfterPrint} onCheckedChange={(v) => setCutAfterPrint(Boolean(v))} />
+                  Cortar cupom ao finalizar
                 </label>
                 <label className="flex items-center gap-2">
                   <Checkbox checked={sendCustomerPdf} onCheckedChange={(v) => setSendCustomerPdf(Boolean(v))} />

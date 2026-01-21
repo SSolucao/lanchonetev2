@@ -6,6 +6,7 @@ interface PrinterConfig {
   vias: number
   encoding: string
   codePage: number
+  cutAfterPrint: boolean
   sendCustomerPdf: boolean
 }
 
@@ -37,6 +38,7 @@ export const getPrinterConfig = (): PrinterConfig => {
       vias: 1,
       encoding: "CP860",
       codePage: 3,
+      cutAfterPrint: false,
       sendCustomerPdf: false,
     }
   }
@@ -49,6 +51,7 @@ export const getPrinterConfig = (): PrinterConfig => {
         vias: 1,
         encoding: "CP860",
         codePage: 3,
+        cutAfterPrint: false,
         sendCustomerPdf: false,
       }
     }
@@ -59,6 +62,7 @@ export const getPrinterConfig = (): PrinterConfig => {
       vias: Math.max(1, Number(parsed.vias) || 1),
       encoding: typeof parsed.encoding === "string" && parsed.encoding ? parsed.encoding : "CP860",
       codePage: Number.isFinite(Number(parsed.codePage)) ? Number(parsed.codePage) : 3,
+      cutAfterPrint: Boolean(parsed.cutAfterPrint),
       sendCustomerPdf: Boolean(parsed.sendCustomerPdf),
     }
   } catch (_err) {
@@ -68,6 +72,7 @@ export const getPrinterConfig = (): PrinterConfig => {
       vias: 1,
       encoding: "CP860",
       codePage: 3,
+      cutAfterPrint: false,
       sendCustomerPdf: false,
     }
   }
@@ -204,7 +209,7 @@ const getPrintColumns = () => {
 // Normaliza linhas para CRLF e ajusta largura da impressão (58mm)
 export const printCupom = async (printer: string, lines: string[], vias: number = 1) => {
   const qz = await ensureQzConnection()
-  const { encoding, codePage } = getPrinterConfig()
+  const { encoding, codePage, cutAfterPrint } = getPrinterConfig()
   const safeCodePage = Number.isFinite(codePage) ? Math.max(0, Math.min(255, codePage)) : 3
   const cfg = qz.configs.create(printer, { encoding })
   const copies = Math.max(1, vias)
@@ -222,6 +227,9 @@ export const printCupom = async (printer: string, lines: string[], vias: number 
   // feed final para garantir saída do papel (sem corte)
   base.push("\r\n\r\n\r\n")
   base.push("\x1B\x64\x04") // feed 4 linhas
+  if (cutAfterPrint) {
+    base.push("\x1D\x56\x00") // corte total
+  }
 
   for (let i = 0; i < copies; i += 1) {
     await qz.print(cfg, base)
