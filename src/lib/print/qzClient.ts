@@ -139,23 +139,50 @@ export const getPrinterModelConfig = (): PrinterModelConfig => {
   }
 }
 
-export const ensureQzConnection = async () => {
+let qzReadyConfigured = false
+
+const configureQzSecurityOnce = () => {
+  if (qzReadyConfigured || typeof window === "undefined") return
+  const qz = (window as any).qz
+  if (!qz?.security) return
+
+  qz.security.setSignatureAlgorithm("SHA512")
+  qz.security.setSignaturePromise(async (toSign: string) => {
+    const res = await fetch("/api/qz/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toSign }),
+    })
+    if (!res.ok) {
+      throw new Error("Falha ao assinar")
+    }
+    const data = await res.json()
+    return data.signature
+  })
+
+  qzReadyConfigured = true
+}
+
+export const ensureQzReady = async () => {
   const qz = (typeof window !== "undefined" && (window as any).qz) || null
   if (!qz) throw new Error("QZ Tray não carregado. Verifique a instalação.")
+  configureQzSecurityOnce()
   if (!qz.websocket.isActive()) {
+    console.log("[qz] Conectando ao QZ Tray")
     await qz.websocket.connect()
   }
   return qz
 }
 
 export const listPrinters = async (): Promise<string[]> => {
-  const qz = await ensureQzConnection()
+  const qz = await ensureQzReady()
+  console.log("[qz] Listando impressoras")
   const list = await qz.printers.find()
   return list || []
 }
 
 export const printRaw = async (printer: string, data: string[], vias: number = 1) => {
-  const qz = await ensureQzConnection()
+  const qz = await ensureQzReady()
   const cfg = qz.configs.create(printer)
   const copies = Math.max(1, vias)
   for (let i = 0; i < copies; i += 1) {
@@ -208,7 +235,7 @@ const getPrintColumns = () => {
 
 // Normaliza linhas para CRLF e ajusta largura da impressão (58mm)
 export const printCupom = async (printer: string, lines: string[], vias: number = 1) => {
-  const qz = await ensureQzConnection()
+  const qz = await ensureQzReady()
   const { encoding, codePage, cutAfterPrint } = getPrinterConfig()
   const safeCodePage = Number.isFinite(codePage) ? Math.max(0, Math.min(255, codePage)) : 3
   const cfg = qz.configs.create(printer, { encoding })

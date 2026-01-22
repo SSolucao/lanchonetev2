@@ -24,7 +24,7 @@ import { PaymentMethodFormDialog } from "@/src/components/PaymentMethodFormDialo
 import { DeliveryRuleFormDialog } from "@/src/components/DeliveryRuleFormDialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { printCupom } from "@/src/lib/print/qzClient"
+import { listPrinters, printCupom } from "@/src/lib/print/qzClient"
 
 export default function ConfiguracoesPage() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
@@ -400,21 +400,11 @@ export default function ConfiguracoesPage() {
     window.setTimeout(() => setPrinterSaveMessage(null), 2000)
   }
 
-  const ensureQzConnection = async () => {
-    const qz = (typeof window !== "undefined" && (window as any).qz) || null
-    if (!qz) throw new Error("Aplicativo de impressão não carregado. Verifique a instalação.")
-    if (!qz.websocket.isActive()) {
-      await qz.websocket.connect()
-    }
-    return qz
-  }
-
   const handleListPrinters = async () => {
     try {
       setIsListingPrinters(true)
-      const qz = await ensureQzConnection()
-      const list = await qz.printers.find()
-      setPrinters(list || [])
+      const list = await listPrinters()
+      setPrinters(list)
     } catch (err: any) {
       alert(err?.message || "Erro ao listar impressoras. Certifique-se de que o app de impressão está aberto.")
     } finally {
