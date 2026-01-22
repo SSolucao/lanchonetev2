@@ -1,6 +1,5 @@
 import { createSign } from "crypto"
 import { NextResponse } from "next/server"
-import { headers } from "next/headers"
 
 const ALLOWED_ORIGINS = new Set(["https://lanchonetev2.vercel.app", "http://localhost:3000"])
 
@@ -14,7 +13,7 @@ const withCors = (response: NextResponse, origin: string | null) => {
 }
 
 export const POST = async (request: Request) => {
-  const origin = headers().get("origin")
+  const origin = request.headers.get("origin")
   const rawKey = process.env.QZ_PRIVATE_KEY_PEM || ""
   if (!rawKey) {
     return withCors(NextResponse.json({ error: "Missing QZ_PRIVATE_KEY_PEM" }, { status: 500 }), origin)
@@ -40,7 +39,7 @@ export const POST = async (request: Request) => {
   return withCors(NextResponse.json({ signature }), origin)
 }
 
-export const OPTIONS = async () => {
-  const origin = headers().get("origin")
+export const OPTIONS = async (request: Request) => {
+  const origin = request.headers.get("origin")
   return withCors(new NextResponse(null, { status: 204 }), origin)
 }

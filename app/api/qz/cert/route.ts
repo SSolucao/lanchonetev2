@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { headers } from "next/headers"
 
 const ALLOWED_ORIGINS = new Set(["https://lanchonetev2.vercel.app", "http://localhost:3000"])
 
@@ -12,8 +11,8 @@ const withCors = (response: NextResponse, origin: string | null) => {
   return response
 }
 
-export const GET = async () => {
-  const origin = (typeof headers !== "undefined" ? headers().get("origin") : null) ?? null
+export const GET = async (request: Request) => {
+  const origin = request.headers.get("origin")
   const rawCert = process.env.QZ_CERT_PEM || ""
   if (!rawCert) {
     return withCors(NextResponse.json({ error: "Missing QZ_CERT_PEM" }, { status: 500 }), origin)
@@ -26,7 +25,7 @@ export const GET = async () => {
   return withCors(response, origin)
 }
 
-export const OPTIONS = async () => {
-  const origin = (typeof headers !== "undefined" ? headers().get("origin") : null) ?? null
+export const OPTIONS = async (request: Request) => {
+  const origin = request.headers.get("origin")
   return withCors(new NextResponse(null, { status: 204 }), origin)
 }
