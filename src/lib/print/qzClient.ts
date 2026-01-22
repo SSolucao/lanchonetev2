@@ -147,9 +147,9 @@ const configureQzSecurityOnce = () => {
   const qz = (window as any).qz
   if (!qz?.security) return
 
-  qz.security.setCertificatePromise(() => {
+  qz.security.setCertificatePromise((resolve: (cert: string) => void, reject: (err: unknown) => void) => {
     console.log("[qz] fetching cert...")
-    return fetch("/api/qz/cert", { cache: "no-store" })
+    fetch("/api/qz/cert", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) {
           throw res
@@ -159,22 +159,26 @@ const configureQzSecurityOnce = () => {
       .then((text) => {
         const cert = text.trim()
         console.log("[qz] cert length:", cert.length)
-        return cert
+        resolve(cert)
       })
+      .catch(reject)
   })
   qz.security.setSignatureAlgorithm("SHA512")
-  qz.security.setSignaturePromise((toSign: string) =>
+  qz.security.setSignaturePromise((toSign: string) => (resolve: (sig: string) => void, reject: (err: unknown) => void) => {
     fetch("/api/qz/sign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ toSign }),
-    }).then((res) => {
-      if (!res.ok) {
-        throw new Error("Falha ao assinar")
-      }
-      return res.json()
-    }).then((data) => data.signature)
-  )
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Falha ao assinar")
+        }
+        return res.json()
+      })
+      .then((data) => resolve(data.signature))
+      .catch(reject)
+  })
   console.log("[qz] security configured")
   qzReadyConfigured = true
 }
