@@ -146,6 +146,14 @@ const configureQzSecurityOnce = () => {
   const qz = (window as any).qz
   if (!qz?.security) return
 
+  qz.security.setCertificatePromise(async () => {
+    const res = await fetch("/api/qz/cert")
+    if (!res.ok) {
+      throw new Error("Falha ao obter certificado")
+    }
+    const data = await res.json()
+    return data.certificate
+  })
   qz.security.setSignatureAlgorithm("SHA512")
   qz.security.setSignaturePromise(async (toSign: string) => {
     const res = await fetch("/api/qz/sign", {
@@ -163,7 +171,7 @@ const configureQzSecurityOnce = () => {
   qzReadyConfigured = true
 }
 
-export const ensureQzReady = async () => {
+export const ensureQzReady = async <T>(action?: (qz: any) => Promise<T> | T) => {
   const qz = (typeof window !== "undefined" && (window as any).qz) || null
   if (!qz) throw new Error("QZ Tray não carregado. Verifique a instalação.")
   configureQzSecurityOnce()
@@ -171,23 +179,28 @@ export const ensureQzReady = async () => {
     console.log("[qz] Conectando ao QZ Tray")
     await qz.websocket.connect()
   }
+  if (action) {
+    return action(qz)
+  }
   return qz
 }
 
 export const listPrinters = async (): Promise<string[]> => {
-  const qz = await ensureQzReady()
-  console.log("[qz] Listando impressoras")
-  const list = await qz.printers.find()
+  const list = await ensureQzReady(async (qz) => {
+    console.log("[qz] Listando impressoras")
+    return qz.printers.find()
+  })
   return list || []
 }
 
 export const printRaw = async (printer: string, data: string[], vias: number = 1) => {
-  const qz = await ensureQzReady()
-  const cfg = qz.configs.create(printer)
   const copies = Math.max(1, vias)
-  for (let i = 0; i < copies; i += 1) {
-    await qz.print(cfg, data)
-  }
+  await ensureQzReady(async (qz) => {
+    const cfg = qz.configs.create(printer)
+    for (let i = 0; i < copies; i += 1) {
+      await qz.print(cfg, data)
+    }
+  })
 }
 
 const wrapLine = (text: string, width: number): string[] => {
@@ -235,10 +248,8 @@ const getPrintColumns = () => {
 
 // Normaliza linhas para CRLF e ajusta largura da impressão (58mm)
 export const printCupom = async (printer: string, lines: string[], vias: number = 1) => {
-  const qz = await ensureQzReady()
   const { encoding, codePage, cutAfterPrint } = getPrinterConfig()
   const safeCodePage = Number.isFinite(codePage) ? Math.max(0, Math.min(255, codePage)) : 3
-  const cfg = qz.configs.create(printer, { encoding })
   const copies = Math.max(1, vias)
 
   // Converte \n em \r\n, mas não duplica se já existir \r\n
@@ -258,9 +269,12 @@ export const printCupom = async (printer: string, lines: string[], vias: number 
     base.push("\x1D\x56\x00") // corte total
   }
 
-  for (let i = 0; i < copies; i += 1) {
-    await qz.print(cfg, base)
-  }
+  await ensureQzReady(async (qz) => {
+    const cfg = qz.configs.create(printer, { encoding })
+    for (let i = 0; i < copies; i += 1) {
+      await qz.print(cfg, base)
+    }
+  })
 }
 
 // Constrói um payload ESC/POS simples com itens, adicionais e observações
