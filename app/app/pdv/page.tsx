@@ -168,7 +168,7 @@ export default function PdvPage() {
   }, [draft.tipoPedido, selectedComandaId])
 
   useEffect(() => {
-    const normalizedSearch = unformatNumbers(customerSearchTerm)
+    const normalizedSearch = customerSearchTerm.trim()
     if (!normalizedSearch || normalizedSearch.length < 2) {
       setCustomerSearchResults([])
       return
@@ -178,7 +178,7 @@ export default function PdvPage() {
       try {
         if (!restaurant) return
         const results = await fetch(
-          `/api/customers/search?restaurantId=${restaurant.id}&searchTerm=${normalizedSearch}`,
+          `/api/customers/search?restaurantId=${restaurant.id}&searchTerm=${encodeURIComponent(normalizedSearch)}`,
         ).then((response) => response.json())
         setCustomerSearchResults(results)
       } catch (error) {
@@ -1053,7 +1053,7 @@ export default function PdvPage() {
                   ) : (
                     <>
                       <Input
-                        placeholder="Buscar por telefone..."
+                        placeholder="Buscar por telefone ou nome..."
                         value={customerSearchTerm}
                         onChange={(e) => setCustomerSearchTerm(e.target.value)}
                       />
