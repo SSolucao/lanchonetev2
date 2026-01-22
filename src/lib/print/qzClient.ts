@@ -146,6 +146,7 @@ const configureQzSecurityOnce = () => {
   const qz = (window as any).qz
   if (!qz?.security) return
 
+  console.log("[qz] Configurando certificatePromise")
   qz.security.setCertificatePromise((resolve: (cert: string) => void, reject: (err: unknown) => void) => {
     fetch("/api/qz/cert", { cache: "no-store" })
       .then((res) => (res.ok ? res.text() : Promise.reject(res)))
@@ -153,6 +154,7 @@ const configureQzSecurityOnce = () => {
       .catch(reject)
   })
   qz.security.setSignatureAlgorithm("SHA512")
+  console.log("[qz] Configurando signaturePromise")
   qz.security.setSignaturePromise(async (toSign: string) => {
     const res = await fetch("/api/qz/sign", {
       method: "POST",

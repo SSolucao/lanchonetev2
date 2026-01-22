@@ -1,19 +1,23 @@
 import { createSign } from "crypto"
 import { NextResponse } from "next/server"
+import { headers } from "next/headers"
 
-const ALLOWED_ORIGIN = "https://lanchonetev2.vercel.app"
+const ALLOWED_ORIGINS = new Set(["https://lanchonetev2.vercel.app", "http://localhost:3000"])
 
-const withCors = (response: NextResponse) => {
-  response.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
+const withCors = (response: NextResponse, origin: string | null) => {
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    response.headers.set("Access-Control-Allow-Origin", origin)
+  }
   response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
   response.headers.set("Access-Control-Allow-Headers", "Content-Type")
   return response
 }
 
 export const POST = async (request: Request) => {
+  const origin = headers().get("origin")
   const rawKey = process.env.QZ_PRIVATE_KEY_PEM || ""
   if (!rawKey) {
-    return withCors(NextResponse.json({ error: "Missing QZ_PRIVATE_KEY_PEM" }, { status: 500 }))
+    return withCors(NextResponse.json({ error: "Missing QZ_PRIVATE_KEY_PEM" }, { status: 500 }), origin)
   }
 
   let body: { toSign?: string } = {}
@@ -24,7 +28,7 @@ export const POST = async (request: Request) => {
   }
 
   if (!body.toSign) {
-    return withCors(NextResponse.json({ error: "Missing toSign" }, { status: 400 }))
+    return withCors(NextResponse.json({ error: "Missing toSign" }, { status: 400 }), origin)
   }
 
   const privateKey = rawKey.replace(/\\n/g, "\n")
@@ -33,9 +37,10 @@ export const POST = async (request: Request) => {
   signer.end()
   const signature = signer.sign(privateKey, "base64")
 
-  return withCors(NextResponse.json({ signature }))
+  return withCors(NextResponse.json({ signature }), origin)
 }
 
 export const OPTIONS = async () => {
-  return withCors(new NextResponse(null, { status: 204 }))
+  const origin = headers().get("origin")
+  return withCors(new NextResponse(null, { status: 204 }), origin)
 }
