@@ -140,6 +140,7 @@ export const getPrinterModelConfig = (): PrinterModelConfig => {
 }
 
 let qzReadyConfigured = false
+let qzConnectInFlight: Promise<any> | null = null
 
 const configureQzSecurityOnce = () => {
   if (qzReadyConfigured || typeof window === "undefined") return
@@ -183,9 +184,16 @@ export const ensureQzReady = async <T>(action?: (qz: any) => Promise<T> | T) => 
   if (!qz) throw new Error("QZ Tray não carregado. Verifique a instalação.")
   configureQzSecurityOnce()
   if (!qz.websocket.isActive()) {
-    console.log("[qz] connecting...")
-    await qz.websocket.connect()
+    if (!qzConnectInFlight) {
+      console.log("[qz] connecting...")
+      qzConnectInFlight = Promise.race([
+        qz.websocket.connect(),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error("QZ connect timeout")), 8000)),
+      ])
+    }
+    await qzConnectInFlight
     console.log("[qz] connected")
+    qzConnectInFlight = null
   }
   if (action) {
     return action(qz)
@@ -196,7 +204,10 @@ export const ensureQzReady = async <T>(action?: (qz: any) => Promise<T> | T) => 
 export const listPrinters = async (): Promise<string[]> => {
   const list = await ensureQzReady(async (qz) => {
     console.log("[qz] Listando impressoras")
-    return qz.printers.find()
+    return Promise.race([
+      qz.printers.find(),
+      new Promise((_, reject) => window.setTimeout(() => reject(new Error("QZ printers timeout")), 8000)),
+    ])
   })
   return list || []
 }
