@@ -157,9 +157,8 @@ const configureQzSecurityOnce = () => {
         return res.text()
       })
       .then((text) => {
-        const cert = text.trim()
-        console.log("[qz] cert length:", cert.length)
-        resolve(cert)
+        console.log("[qz] cert length:", text.length)
+        resolve(text)
       })
       .catch(reject)
   })
