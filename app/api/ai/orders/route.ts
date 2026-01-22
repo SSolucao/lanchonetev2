@@ -357,7 +357,6 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
 
     const productMap = new Map((productsData || []).map((p: any) => [p.id, p]))
     const requiresKitchen = (productsData || []).some((p: any) => Boolean(p.requires_kitchen))
-    const needsWorkflow = finalTipoPedido === "ENTREGA" || finalTipoPedido === "RETIRADA"
 
     for (const item of parsedItems) {
       const product = productMap.get(item.product_id)
@@ -439,6 +438,8 @@ let parsedItems: Array<{ product_id: string; quantity: number; notes: string | n
       }
       finalTipoPedido = serviceTypeMap[service_type.toUpperCase()] || "ENTREGA"
     }
+
+    const needsWorkflow = finalTipoPedido === "ENTREGA" || finalTipoPedido === "RETIRADA"
 
     // Calculate delivery fee (only for ENTREGA)
     const deliveryFee = finalTipoPedido === "ENTREGA" ? customer.delivery_fee_default || 0 : 0
