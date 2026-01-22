@@ -16,7 +16,10 @@ export const GET = async () => {
   }
 
   const certificate = rawCert.replace(/\\n/g, "\n")
-  return withCors(NextResponse.json({ certificate }))
+  const response = new NextResponse(certificate, {
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  })
+  return withCors(response)
 }
 
 export const OPTIONS = async () => {
