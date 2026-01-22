@@ -146,28 +146,35 @@ const configureQzSecurityOnce = () => {
   const qz = (window as any).qz
   if (!qz?.security) return
 
-  console.log("[qz] Configurando certificatePromise")
-  qz.security.setCertificatePromise((resolve: (cert: string) => void, reject: (err: unknown) => void) => {
-    fetch("/api/qz/cert", { cache: "no-store" })
-      .then((res) => (res.ok ? res.text() : Promise.reject(res)))
-      .then(resolve)
-      .catch(reject)
+  qz.security.setCertificatePromise(() => {
+    console.log("[qz] fetching cert...")
+    return fetch("/api/qz/cert", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) {
+          throw res
+        }
+        return res.text()
+      })
+      .then((text) => {
+        const cert = text.trim()
+        console.log("[qz] cert length:", cert.length)
+        return cert
+      })
   })
   qz.security.setSignatureAlgorithm("SHA512")
-  console.log("[qz] Configurando signaturePromise")
-  qz.security.setSignaturePromise(async (toSign: string) => {
-    const res = await fetch("/api/qz/sign", {
+  qz.security.setSignaturePromise((toSign: string) =>
+    fetch("/api/qz/sign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ toSign }),
-    })
-    if (!res.ok) {
-      throw new Error("Falha ao assinar")
-    }
-    const data = await res.json()
-    return data.signature
-  })
-
+    }).then((res) => {
+      if (!res.ok) {
+        throw new Error("Falha ao assinar")
+      }
+      return res.json()
+    }).then((data) => data.signature)
+  )
+  console.log("[qz] security configured")
   qzReadyConfigured = true
 }
 
@@ -176,8 +183,9 @@ export const ensureQzReady = async <T>(action?: (qz: any) => Promise<T> | T) => 
   if (!qz) throw new Error("QZ Tray não carregado. Verifique a instalação.")
   configureQzSecurityOnce()
   if (!qz.websocket.isActive()) {
-    console.log("[qz] Conectando ao QZ Tray")
+    console.log("[qz] connecting...")
     await qz.websocket.connect()
+    console.log("[qz] connected")
   }
   if (action) {
     return action(qz)
