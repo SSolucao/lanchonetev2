@@ -97,17 +97,21 @@ export async function getFeeByDistance(
       .from("delivery_rules")
       .select("*")
       .eq("restaurant_id", restaurantId)
+      .is("neighborhood", null)
       .order("from_km", { ascending: true })
 
     if (error) throw error
 
-    if (!rules || rules.length === 0) {
+    const distanceRules =
+      rules?.filter((rule) => Number.isFinite(Number(rule.from_km)) && Number.isFinite(Number(rule.to_km))) || []
+
+    if (distanceRules.length === 0) {
       console.log("[v0] No delivery rules found for restaurant:", restaurantId)
       return null
     }
 
     // Encontra a regra aplicável
-    for (const rule of rules) {
+    for (const rule of distanceRules) {
       const fromKm = Number.parseFloat(rule.from_km)
       const toKm = Number.parseFloat(rule.to_km)
 
@@ -125,7 +129,7 @@ export async function getFeeByDistance(
     }
 
     // Se a distância for maior que todas as regras, usa a última
-    const lastRule = rules[rules.length - 1]
+    const lastRule = distanceRules[distanceRules.length - 1]
     if (distanceKm >= Number.parseFloat(lastRule.from_km)) {
       console.log("[v0] Using last rule for distance:", distanceKm)
       return {

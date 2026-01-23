@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { listCustomers, createCustomer, getCustomerByPhone, findCustomersByName } from "@/src/services/customersService"
 import { getCurrentRestaurant } from "@/src/services/restaurantsService"
 import { calculateDeliveryFee } from "@/src/services/deliveryFeeService"
+import { findDeliveryFeeForNeighborhood } from "@/src/services/deliveryRulesService"
 import { normalizePhoneToInternational } from "@/lib/format-utils"
 
 export async function GET() {
@@ -51,6 +52,22 @@ export async function POST(request: NextRequest) {
       const nameMatches = await findCustomersByName(restaurant.id, String(body.name || ""))
       if (nameMatches.length > 0) {
         return NextResponse.json({ error: "NAME_EXISTS", matches: nameMatches }, { status: 409 })
+      }
+    }
+
+    const hasNeighborhood = typeof body.neighborhood === "string" && body.neighborhood.trim().length > 0
+    const hasCep = typeof body.cep === "string" && body.cep.trim().length > 0
+    if (hasNeighborhood && !hasCep) {
+      const neighborhoodFee = await findDeliveryFeeForNeighborhood(restaurant.id, body.neighborhood.trim())
+      if (neighborhoodFee === null) {
+        return NextResponse.json(
+          {
+            error: "NEIGHBORHOOD_NOT_FOUND",
+            message: "Bairro nao cadastrado. Informe o CEP para calcular a taxa por KM.",
+            require_cep: true,
+          },
+          { status: 422 },
+        )
       }
     }
 

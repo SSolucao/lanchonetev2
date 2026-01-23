@@ -64,20 +64,33 @@ export async function findDeliveryFeeForNeighborhood(
   const supabase = await createClient()
 
   const normalized = neighborhood.trim()
-  const pattern = `%${normalized}%`
+  if (!normalized) return null
 
-  const { data, error } = await supabase
-    .from("delivery_rules")
-    .select("*")
-    .eq("restaurant_id", restaurantId)
-    .ilike("neighborhood", pattern) // Case-insensitive, substring match
-    .single()
+  const baseQuery = supabase.from("delivery_rules").select("*").eq("restaurant_id", restaurantId)
 
-  if (error) {
-    if (error.code === "PGRST116") return null // No rule found
-    throw error
+  const { data: exactMatch, error: exactError } = await baseQuery
+    .eq("neighborhood_normalized", normalized.toLowerCase())
+    .limit(1)
+
+  if (exactError) throw exactError
+  if (exactMatch && exactMatch.length > 0) {
+    return (exactMatch[0] as DeliveryRule).fee
   }
-  return (data as DeliveryRule).fee
+
+  const { data: aliasMatch, error: aliasError } = await baseQuery.contains("neighborhood_aliases", [normalized])
+
+  if (aliasError) throw aliasError
+  if (aliasMatch && aliasMatch.length > 0) {
+    return (aliasMatch[0] as DeliveryRule).fee
+  }
+
+  const pattern = `%${normalized}%`
+  const { data: partialMatch, error: partialError } = await baseQuery.ilike("neighborhood", pattern).limit(1)
+
+  if (partialError) throw partialError
+  if (!partialMatch || partialMatch.length === 0) return null
+
+  return (partialMatch[0] as DeliveryRule).fee
 }
 
 /**

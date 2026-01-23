@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { fetchAddressFromCEP } from "@/lib/format-utils"
 import { calculateDeliveryFee, buildFullAddress } from "@/src/services/deliveryFeeService"
+import { findDeliveryFeeForNeighborhood } from "@/src/services/deliveryRulesService"
 import { logApiCall } from "@/src/services/apiLogService"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
@@ -233,6 +234,32 @@ export async function POST(request: Request) {
         }
       } catch (err) {
         console.error("[v0] Erro ao buscar endereço via ViaCEP:", err)
+      }
+    }
+
+    const hasNeighborhood = typeof neighborhood === "string" && neighborhood.trim().length > 0
+    const hasCep = typeof cep === "string" && cep.trim().length > 0
+    if (hasNeighborhood && !hasCep) {
+      const neighborhoodFee = await findDeliveryFeeForNeighborhood(restaurant.id, neighborhood.trim())
+      if (neighborhoodFee === null) {
+        statusCode = 422
+        const response = {
+          error: "NEIGHBORHOOD_NOT_FOUND",
+          message: "Bairro nao cadastrado. Informe o CEP para calcular a taxa por KM.",
+          require_cep: true,
+        }
+
+        await logApiCall({
+          route: "/api/ai/customers",
+          method: "POST",
+          status_code: statusCode,
+          duration_ms: Date.now() - startedAt,
+          request_body: body,
+          response_body: response,
+          restaurant_id: restaurant.id,
+        })
+
+        return NextResponse.json(response, { status: statusCode })
       }
     }
 
