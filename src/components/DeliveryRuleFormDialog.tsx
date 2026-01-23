@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import type { DeliveryRule } from "@/src/domain/types"
-import { formatCEP, unformatNumbers, fetchAddressFromCEP } from "@/lib/format-utils"
+import * as XLSX from "xlsx"
+
+type BulkEntry = { neighborhood: string; fee: number }
 
 interface DeliveryRuleFormDialogProps {
   open: boolean
@@ -20,12 +22,13 @@ interface DeliveryRuleFormDialogProps {
 
 export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: DeliveryRuleFormDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [loadingCEP, setLoadingCEP] = useState(false)
   const [ruleType, setRuleType] = useState<"distance" | "neighborhood">("neighborhood")
   const [fromKm, setFromKm] = useState("")
   const [toKm, setToKm] = useState("")
-  const [cep, setCep] = useState("")
-  const [bulkCeps, setBulkCeps] = useState("")
+  const [bulkNeighborhoods, setBulkNeighborhoods] = useState("")
+  const [bulkEntries, setBulkEntries] = useState<BulkEntry[]>([])
+  const [bulkErrors, setBulkErrors] = useState<string[]>([])
+  const [bulkFileName, setBulkFileName] = useState("")
   const [neighborhood, setNeighborhood] = useState("")
   const [fee, setFee] = useState("")
 
@@ -34,16 +37,20 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
       if (deliveryRule.neighborhood) {
         setRuleType("neighborhood")
         setNeighborhood(deliveryRule.neighborhood)
-        setCep("")
-        setBulkCeps("")
+        setBulkNeighborhoods("")
+        setBulkEntries([])
+        setBulkErrors([])
+        setBulkFileName("")
         setFromKm("")
         setToKm("")
       } else {
         setRuleType("distance")
         setFromKm(deliveryRule.from_km?.toString() || "")
         setToKm(deliveryRule.to_km?.toString() || "")
-        setCep("")
-        setBulkCeps("")
+        setBulkNeighborhoods("")
+        setBulkEntries([])
+        setBulkErrors([])
+        setBulkFileName("")
         setNeighborhood("")
       }
       setFee(deliveryRule.fee.toString())
@@ -56,54 +63,148 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
     setRuleType("neighborhood")
     setFromKm("")
     setToKm("")
-    setCep("")
-    setBulkCeps("")
+    setBulkNeighborhoods("")
+    setBulkEntries([])
+    setBulkErrors([])
+    setBulkFileName("")
     setNeighborhood("")
     setFee("")
   }
 
-  function parseCepList(value: string) {
-    const unique = new Set<string>()
-    value
-      .split(/[;,\s]+/)
-      .map((entry) => unformatNumbers(entry))
-      .filter((entry) => entry.length === 8)
-      .forEach((entry) => unique.add(entry))
-    return Array.from(unique)
+  function parseFee(value: string) {
+    const normalized = value.replace(",", ".").trim()
+    const parsed = Number.parseFloat(normalized)
+    return Number.isFinite(parsed) ? parsed : null
   }
 
-  async function handleCEPChange(value: string) {
-    const formatted = formatCEP(value)
-    setCep(formatted)
+  function parseBulkText(value: string) {
+    const entries: BulkEntry[] = []
+    const errors: string[] = []
 
-    // Se CEP está completo (8 dígitos), busca o endereço
-    const cleanCEP = unformatNumbers(formatted)
-    if (cleanCEP.length === 8) {
-      setLoadingCEP(true)
-      const addressData = await fetchAddressFromCEP(cleanCEP)
-      setLoadingCEP(false)
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .forEach((line, index) => {
+        const parts = line.split(/[;,|\t]/).map((part) => part.trim())
+        const name = parts[0]
+        const feeValue = parts[1]
+        if (!name || !feeValue) {
+          errors.push(`Linha ${index + 1}: formato inválido`)
+          return
+        }
+        const parsedFee = parseFee(feeValue)
+        if (parsedFee === null) {
+          errors.push(`Linha ${index + 1}: taxa inválida`)
+          return
+        }
+        entries.push({ neighborhood: name, fee: parsedFee })
+      })
 
-      if (addressData && addressData.bairro) {
-        setNeighborhood(addressData.bairro)
-      } else {
-        alert("CEP não encontrado ou sem informação de bairro")
-        setNeighborhood("")
+    return { entries, errors }
+  }
+
+  function mapRowsToEntries(rows: Array<Record<string, any>>) {
+    const entries: BulkEntry[] = []
+    const errors: string[] = []
+
+    rows.forEach((row, index) => {
+      const keys = Object.keys(row)
+      const nameKey = keys.find((key) => ["bairro", "nome", "neighborhood"].includes(key.toLowerCase()))
+      const feeKey = keys.find((key) => ["taxa", "valor", "fee"].includes(key.toLowerCase()))
+
+      const name = nameKey ? String(row[nameKey] ?? "").trim() : ""
+      const feeValue = feeKey ? String(row[feeKey] ?? "").trim() : ""
+
+      if (!name || !feeValue) {
+        errors.push(`Linha ${index + 2}: bairro ou taxa ausente`)
+        return
       }
-    } else {
-      // Se CEP foi apagado, limpa o bairro
-      setNeighborhood("")
+
+      const parsedFee = parseFee(feeValue)
+      if (parsedFee === null) {
+        errors.push(`Linha ${index + 2}: taxa inválida`)
+        return
+      }
+
+      entries.push({ neighborhood: name, fee: parsedFee })
+    })
+
+    return { entries, errors }
+  }
+
+  function handleDownloadTemplate() {
+    const rows = [
+      { bairro: "Jardim Central", taxa: 10.5 },
+      { bairro: "Vila Sao Jose", taxa: 7.0 },
+    ]
+
+    const sheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, sheet, "Bairros")
+    const arrayBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
+    const blob = new Blob([arrayBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "modelo-bairros.xlsx"
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleBulkFileChange(file?: File | null) {
+    if (!file) {
+      setBulkFileName("")
+      setBulkEntries([])
+      setBulkErrors([])
+      return
     }
+
+    setBulkFileName(file.name)
+
+    const extension = file.name.toLowerCase().split(".").pop()
+    const buffer = await file.arrayBuffer()
+
+    if (extension === "csv") {
+      const text = new TextDecoder().decode(buffer)
+      const { entries, errors } = parseBulkText(text)
+      setBulkEntries(entries)
+      setBulkErrors(errors)
+      return
+    }
+
+    if (extension === "xlsx") {
+      const workbook = XLSX.read(buffer, { type: "array" })
+      const firstSheet = workbook.SheetNames[0]
+      if (!firstSheet) {
+        setBulkEntries([])
+        setBulkErrors(["Arquivo XLSX sem planilha"])
+        return
+      }
+      const sheet = workbook.Sheets[firstSheet]
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Array<Record<string, any>>
+      const { entries, errors } = mapRowsToEntries(rows)
+      setBulkEntries(entries)
+      setBulkErrors(errors)
+      return
+    }
+
+    setBulkEntries([])
+    setBulkErrors(["Formato inválido. Use CSV ou XLSX."])
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (!fee) {
-      alert("Preencha o valor da taxa")
-      return
-    }
-
     if (ruleType === "distance") {
+      if (!fee) {
+        alert("Preencha o valor da taxa")
+        return
+      }
       if (!fromKm || !toKm) {
         alert("Preencha as distâncias mínima e máxima")
         return
@@ -117,16 +218,13 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
         return
       }
     } else {
-      const cepList = parseCepList(bulkCeps)
-      const useBulk = !deliveryRule && bulkCeps.trim().length > 0
-
-      if (useBulk && cepList.length === 0) {
-        alert("Nenhum CEP válido encontrado")
+      const useBulk = !deliveryRule && (bulkEntries.length > 0 || bulkNeighborhoods.trim().length > 0)
+      if (!useBulk && !neighborhood.trim()) {
+        alert("Preencha o nome do bairro")
         return
       }
-
-      if (!useBulk && !neighborhood.trim()) {
-        alert("Preencha o CEP para buscar o bairro")
+      if (!useBulk && !fee) {
+        alert("Preencha o valor da taxa")
         return
       }
     }
@@ -134,18 +232,23 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
     try {
       setLoading(true)
 
-      const useBulk = ruleType === "neighborhood" && !deliveryRule && bulkCeps.trim().length > 0
+      const useBulk = ruleType === "neighborhood" && !deliveryRule && (bulkEntries.length > 0 || bulkNeighborhoods.trim().length > 0)
 
       if (useBulk) {
-        const cepList = parseCepList(bulkCeps)
-        const invalidCeps: string[] = []
-        const failedCeps: string[] = []
+        const manualParsed = parseBulkText(bulkNeighborhoods)
+        const entries = [...bulkEntries, ...manualParsed.entries]
+        const entryErrors = [...bulkErrors, ...manualParsed.errors]
+        const failedEntries: string[] = []
         let successCount = 0
 
-        for (const cepItem of cepList) {
-          const addressData = await fetchAddressFromCEP(cepItem)
-          if (!addressData?.bairro) {
-            invalidCeps.push(cepItem)
+        if (entries.length === 0) {
+          alert("Nenhum bairro válido encontrado")
+          return
+        }
+
+        for (const entry of entries) {
+          if (!entry.neighborhood.trim()) {
+            failedEntries.push(entry.neighborhood || "Bairro vazio")
             continue
           }
 
@@ -153,15 +256,15 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              neighborhood: addressData.bairro.trim(),
-              fee: Number.parseFloat(fee),
+              neighborhood: entry.neighborhood.trim(),
+              fee: entry.fee,
               from_km: null,
               to_km: null,
             }),
           })
 
           if (!response.ok) {
-            failedCeps.push(cepItem)
+            failedEntries.push(entry.neighborhood)
             continue
           }
 
@@ -169,8 +272,8 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
         }
 
         const messages = [`Regras criadas: ${successCount}`]
-        if (invalidCeps.length > 0) messages.push(`CEPs sem bairro: ${invalidCeps.join(", ")}`)
-        if (failedCeps.length > 0) messages.push(`Falha ao salvar: ${failedCeps.join(", ")}`)
+        if (entryErrors.length > 0) messages.push(`Linhas inválidas: ${entryErrors.length}`)
+        if (failedEntries.length > 0) messages.push(`Falha ao salvar: ${failedEntries.join(", ")}`)
         alert(messages.join("\n"))
 
         if (successCount > 0) {
@@ -214,6 +317,9 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
     }
   }
 
+  const isBulkMode =
+    ruleType === "neighborhood" && !deliveryRule && (bulkEntries.length > 0 || bulkNeighborhoods.trim().length > 0)
+
   return (
     <Dialog open={open} onOpenChange={() => onClose(false)}>
       <DialogContent>
@@ -244,48 +350,46 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
             <>
               {!deliveryRule && (
                 <div className="space-y-2">
-                  <Label>CEPs em massa (opcional)</Label>
+                  <Label>Cadastro em massa (opcional)</Label>
+                  <Button type="button" variant="outline" className="w-fit" onClick={handleDownloadTemplate}>
+                    Baixar modelo XLSX
+                  </Button>
+                  <Input
+                    type="file"
+                    accept=".csv,.xlsx"
+                    onChange={(e) => handleBulkFileChange(e.target.files?.[0])}
+                  />
+                  {bulkFileName && (
+                    <p className="text-xs text-muted-foreground">Arquivo: {bulkFileName}</p>
+                  )}
                   <Textarea
-                    placeholder="Cole CEPs separados por ; , espaço ou quebra de linha"
-                    value={bulkCeps}
-                    onChange={(e) => setBulkCeps(e.target.value)}
+                    placeholder="Cole linhas no formato: Bairro;Taxa"
+                    value={bulkNeighborhoods}
+                    onChange={(e) => setBulkNeighborhoods(e.target.value)}
                     rows={4}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Exemplo: 12345-678; 12345-679 12345-680
-                  </p>
-                  {bulkCeps.trim() && (
+                  <p className="text-xs text-muted-foreground">Exemplo: Jardim Central; 10,50</p>
+                  {(bulkEntries.length > 0 || bulkNeighborhoods.trim().length > 0) && (
                     <p className="text-xs text-muted-foreground">
-                      Detectados: {parseCepList(bulkCeps).length} CEPs válidos
+                      Detectados: {bulkEntries.length + parseBulkText(bulkNeighborhoods).entries.length} linhas válidas
                     </p>
+                  )}
+                  {bulkErrors.length > 0 && (
+                    <p className="text-xs text-destructive">Linhas inválidas no arquivo: {bulkErrors.length}</p>
                   )}
                 </div>
               )}
 
-              {!(bulkCeps.trim() && !deliveryRule) && (
+              {!(bulkEntries.length > 0 || bulkNeighborhoods.trim().length > 0) && (
                 <div className="space-y-2">
-                  <Label>CEP do Bairro *</Label>
+                  <Label>Nome do bairro *</Label>
                   <Input
                     type="text"
-                    placeholder="12345-678"
-                    value={cep}
-                    onChange={(e) => handleCEPChange(e.target.value)}
-                    inputMode="numeric"
-                    disabled={loadingCEP}
+                    placeholder="Ex: Jardim Sao Jose"
+                    value={neighborhood}
+                    onChange={(e) => setNeighborhood(e.target.value)}
                     required
                   />
-                  {loadingCEP && <p className="text-xs text-muted-foreground">Buscando bairro...</p>}
-                  <p className="text-xs text-muted-foreground">Digite um CEP do bairro para buscar automaticamente</p>
-                </div>
-              )}
-
-              {neighborhood && !(bulkCeps.trim() && !deliveryRule) && (
-                <div className="space-y-2">
-                  <Label>Bairro Encontrado</Label>
-                  <Input type="text" value={neighborhood} readOnly className="bg-muted" />
-                  <p className="text-xs text-muted-foreground">
-                    Este é o bairro que será salvo na regra (conforme ViaCEP)
-                  </p>
                 </div>
               )}
             </>
@@ -317,10 +421,19 @@ export function DeliveryRuleFormDialog({ open, deliveryRule, onClose }: Delivery
             </>
           )}
 
-          <div className="space-y-2">
-            <Label>Taxa (R$) *</Label>
-            <Input type="number" step="0.01" min="0" value={fee} onChange={(e) => setFee(e.target.value)} required />
-          </div>
+          {ruleType === "distance" || !isBulkMode ? (
+            <div className="space-y-2">
+              <Label>Taxa (R$) *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+                required
+              />
+            </div>
+          ) : null}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onClose(false)}>

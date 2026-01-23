@@ -93,6 +93,26 @@ export default function ConfiguracoesPage() {
   const [deleteRuleDialogOpen, setDeleteRuleDialogOpen] = useState(false)
   const [ruleToDelete, setRuleToDelete] = useState<DeliveryRule | null>(null)
   const [deletingRule, setDeletingRule] = useState(false)
+  const [neighborhoodPage, setNeighborhoodPage] = useState(1)
+  const [distancePage, setDistancePage] = useState(1)
+  const [neighborhoodSearch, setNeighborhoodSearch] = useState("")
+
+  const PAGE_SIZE = 5
+  const neighborhoodRules = deliveryRules.filter((rule) => rule.neighborhood)
+  const distanceRules = deliveryRules.filter((rule) => !rule.neighborhood)
+  const normalizedNeighborhoodSearch = neighborhoodSearch.trim().toLowerCase()
+  const neighborhoodFiltered = normalizedNeighborhoodSearch
+    ? neighborhoodRules.filter((rule) => rule.neighborhood?.toLowerCase().includes(normalizedNeighborhoodSearch))
+    : neighborhoodRules
+  const neighborhoodTotalPages = Math.max(1, Math.ceil(neighborhoodFiltered.length / PAGE_SIZE))
+  const distanceTotalPages = Math.max(1, Math.ceil(distanceRules.length / PAGE_SIZE))
+  const neighborhoodPageSafe = Math.min(neighborhoodPage, neighborhoodTotalPages)
+  const distancePageSafe = Math.min(distancePage, distanceTotalPages)
+  const neighborhoodPageItems = neighborhoodFiltered.slice(
+    (neighborhoodPageSafe - 1) * PAGE_SIZE,
+    neighborhoodPageSafe * PAGE_SIZE,
+  )
+  const distancePageItems = distanceRules.slice((distancePageSafe - 1) * PAGE_SIZE, distancePageSafe * PAGE_SIZE)
 
   useEffect(() => {
     loadData()
@@ -129,6 +149,22 @@ export default function ConfiguracoesPage() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (neighborhoodPage > neighborhoodTotalPages) {
+      setNeighborhoodPage(neighborhoodTotalPages)
+    }
+  }, [neighborhoodPage, neighborhoodTotalPages])
+
+  useEffect(() => {
+    if (distancePage > distanceTotalPages) {
+      setDistancePage(distanceTotalPages)
+    }
+  }, [distancePage, distanceTotalPages])
+
+  useEffect(() => {
+    setNeighborhoodPage(1)
+  }, [normalizedNeighborhoodSearch])
 
   async function loadData() {
     try {
@@ -877,6 +913,13 @@ export default function ConfiguracoesPage() {
                 <p className="text-xs text-muted-foreground">
                   Se houver correspondência de bairro, ela será usada antes da distância.
                 </p>
+                <div className="mt-3">
+                  <Input
+                    placeholder="Buscar bairro..."
+                    value={neighborhoodSearch}
+                    onChange={(e) => setNeighborhoodSearch(e.target.value)}
+                  />
+                </div>
               </div>
               <table className="w-full">
                 <thead>
@@ -887,32 +930,73 @@ export default function ConfiguracoesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {deliveryRules.filter((rule) => rule.neighborhood).length === 0 ? (
+                  {neighborhoodFiltered.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="text-center py-8 text-muted-foreground">
-                        Nenhuma regra por bairro cadastrada
+                        {normalizedNeighborhoodSearch
+                          ? "Nenhum bairro encontrado"
+                          : "Nenhuma regra por bairro cadastrada"}
                       </td>
                     </tr>
                   ) : (
-                    deliveryRules
-                      .filter((rule) => rule.neighborhood)
-                      .map((rule) => (
-                        <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="p-3">{rule.neighborhood}</td>
-                          <td className="p-3 text-right">R$ {rule.fee.toFixed(2)}</td>
-                          <td className="p-3 text-center">
-                            <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
+                    neighborhoodPageItems.map((rule) => (
+                      <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <td className="p-3">{rule.neighborhood}</td>
+                        <td className="p-3 text-right">R$ {rule.fee.toFixed(2)}</td>
+                        <td className="p-3 text-center">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
+              {neighborhoodTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 border-t px-3 py-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={neighborhoodPageSafe === 1}
+                    onClick={() => setNeighborhoodPage(neighborhoodPageSafe - 1)}
+                  >
+                    &lt;
+                  </Button>
+                  {(() => {
+                    const windowSize = 3
+                    const half = Math.floor(windowSize / 2)
+                    let start = Math.max(1, neighborhoodPageSafe - half)
+                    let end = Math.min(neighborhoodTotalPages, start + windowSize - 1)
+                    start = Math.max(1, end - windowSize + 1)
+
+                    return Array.from({ length: end - start + 1 }, (_, index) => {
+                      const page = start + index
+                      return (
+                        <Button
+                          key={page}
+                          variant={page === neighborhoodPageSafe ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setNeighborhoodPage(page)}
+                        >
+                          {page}
+                        </Button>
+                      )
+                    })
+                  })()}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={neighborhoodPageSafe === neighborhoodTotalPages}
+                    onClick={() => setNeighborhoodPage(neighborhoodPageSafe + 1)}
+                  >
+                    &gt;
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Regras por distância */}
@@ -931,33 +1015,72 @@ export default function ConfiguracoesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {deliveryRules.filter((rule) => !rule.neighborhood).length === 0 ? (
+                  {distanceRules.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="text-center py-8 text-muted-foreground">
                         Nenhuma regra por distância cadastrada
                       </td>
                     </tr>
                   ) : (
-                    deliveryRules
-                      .filter((rule) => !rule.neighborhood)
-                      .map((rule) => (
-                        <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="p-3">{rule.from_km}</td>
-                          <td className="p-3">{rule.to_km}</td>
-                          <td className="p-3 text-right">R$ {rule.fee.toFixed(2)}</td>
-                          <td className="p-3 text-center">
-                            <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
+                    distancePageItems.map((rule) => (
+                      <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <td className="p-3">{rule.from_km}</td>
+                        <td className="p-3">{rule.to_km}</td>
+                        <td className="p-3 text-right">R$ {rule.fee.toFixed(2)}</td>
+                        <td className="p-3 text-center">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditDeliveryRule(rule)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteDeliveryRule(rule)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
+              {distanceTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 border-t px-3 py-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={distancePageSafe === 1}
+                    onClick={() => setDistancePage(distancePageSafe - 1)}
+                  >
+                    &lt;
+                  </Button>
+                  {(() => {
+                    const windowSize = 3
+                    const half = Math.floor(windowSize / 2)
+                    let start = Math.max(1, distancePageSafe - half)
+                    let end = Math.min(distanceTotalPages, start + windowSize - 1)
+                    start = Math.max(1, end - windowSize + 1)
+
+                    return Array.from({ length: end - start + 1 }, (_, index) => {
+                      const page = start + index
+                      return (
+                        <Button
+                          key={page}
+                          variant={page === distancePageSafe ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setDistancePage(page)}
+                        >
+                          {page}
+                        </Button>
+                      )
+                    })
+                  })()}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={distancePageSafe === distanceTotalPages}
+                    onClick={() => setDistancePage(distancePageSafe + 1)}
+                  >
+                    &gt;
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>
