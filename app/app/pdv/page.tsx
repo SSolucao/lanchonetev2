@@ -70,6 +70,8 @@ export default function PdvPage() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [categoryModal, setCategoryModal] = useState<string | null>(null)
   const addressPromptedCustomerId = useRef<string | null>(null)
+  const [modalPage, setModalPage] = useState(1)
+  const MODAL_PAGE_SIZE = 12
 
   const [newCustomerData, setNewCustomerData] = useState({
     name: "",
@@ -207,6 +209,13 @@ export default function PdvPage() {
     const matchesCategory = !selectedCategory || product.category === selectedCategory
     return matchesSearch && matchesCategory
   })
+
+  const modalTotalPages = Math.max(1, Math.ceil(filteredProducts.length / MODAL_PAGE_SIZE))
+  const modalPageSafe = Math.min(modalPage, modalTotalPages)
+  const modalPageItems = filteredProducts.slice(
+    (modalPageSafe - 1) * MODAL_PAGE_SIZE,
+    modalPageSafe * MODAL_PAGE_SIZE,
+  )
 
   const productsByCategory = availableProducts.reduce<Record<string, Product[]>>((acc, product) => {
     const cat = product.category || "Sem categoria"
@@ -667,6 +676,10 @@ export default function PdvPage() {
       setDeliveryFee(draft.customer.delivery_fee_default || 0)
     }
   }, [isEntrega, draft.customer, setDeliveryFee])
+
+  useEffect(() => {
+    setModalPage(1)
+  }, [searchTerm, selectedCategory, categoryModalOpen])
 
   useEffect(() => {
     if (!draft.customer) return
@@ -1207,14 +1220,14 @@ export default function PdvPage() {
 
       {/* Modal de produtos por categoria */}
       <Dialog open={categoryModalOpen} onOpenChange={(v) => !v && setCategoryModalOpen(false)}>
-        <DialogContent className="max-w-6xl sm:max-w-6xl w-[96vw]">
+        <DialogContent className="max-w-6xl sm:max-w-6xl w-[96vw] h-[80vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {categoryModal && categoryModal !== "Todos" ? `Produtos - ${categoryModal}` : "Todos os produtos"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="flex h-full flex-col gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -1225,45 +1238,91 @@ export default function PdvPage() {
               />
             </div>
 
-            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-              {filteredProducts.map((product) => (
-                <Card
-                  key={product.id}
-                  className="cursor-pointer transition-colors hover:bg-accent border shadow-sm"
-                  onClick={() => {
-                    setCategoryModalOpen(false)
-                    openProductModal(product)
-                  }}
-                >
-                  <CardContent className="p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium line-clamp-2">{product.name}</h3>
-                          {product.type === "COMBO" && (
-                            <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                              Combo
-                            </span>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="grid auto-rows-[120px] gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                {modalPageItems.map((product) => (
+                  <Card
+                    key={product.id}
+                    className="cursor-pointer transition-colors hover:bg-accent border shadow-sm h-full"
+                    onClick={() => {
+                      setCategoryModalOpen(false)
+                      openProductModal(product)
+                    }}
+                  >
+                    <CardContent className="p-3 space-y-2 h-full">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium line-clamp-2">{product.name}</h3>
+                            {product.type === "COMBO" && (
+                              <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                Combo
+                              </span>
+                            )}
+                          </div>
+                          {product.category && (
+                            <p className="text-xs text-muted-foreground truncate">{product.category}</p>
                           )}
                         </div>
-                        {product.category && (
-                          <p className="text-xs text-muted-foreground truncate">{product.category}</p>
-                        )}
+                        <p className="text-base font-semibold whitespace-nowrap">R$ {product.price.toFixed(2)}</p>
                       </div>
-                      <p className="text-base font-semibold whitespace-nowrap">R$ {product.price.toFixed(2)}</p>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Selecionar</span>
-                      <Plus className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Selecionar</span>
+                        <Plus className="h-4 w-4" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
 
-              {filteredProducts.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground col-span-full">Nenhum produto encontrado</div>
-              )}
+                {filteredProducts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground col-span-full">
+                    Nenhum produto encontrado
+                  </div>
+                )}
+              </div>
             </div>
+
+            {modalTotalPages > 1 && (
+              <div className="mt-auto flex items-center justify-center gap-2 border-t pt-3 pb-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={modalPageSafe === 1}
+                  onClick={() => setModalPage(modalPageSafe - 1)}
+                >
+                  &lt;
+                </Button>
+                {(() => {
+                  const windowSize = 3
+                  const half = Math.floor(windowSize / 2)
+                  let start = Math.max(1, modalPageSafe - half)
+                  let end = Math.min(modalTotalPages, start + windowSize - 1)
+                  start = Math.max(1, end - windowSize + 1)
+
+                  return Array.from({ length: end - start + 1 }, (_, index) => {
+                    const page = start + index
+                    return (
+                      <Button
+                        key={page}
+                        variant={page === modalPageSafe ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setModalPage(page)}
+                      >
+                        {page}
+                      </Button>
+                    )
+                  })
+                })()}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={modalPageSafe === modalTotalPages}
+                  onClick={() => setModalPage(modalPageSafe + 1)}
+                >
+                  &gt;
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
