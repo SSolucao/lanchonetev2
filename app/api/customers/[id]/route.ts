@@ -52,6 +52,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       body.city !== existingCustomer.city
 
     const hasManualFee = body.delivery_fee_default !== undefined && body.delivery_fee_default !== null
+    let deliveryAvailable = existingCustomer.delivery_available ?? true
 
     if (!hasManualFee && addressChanged && body.cep && body.street && body.number) {
       try {
@@ -80,12 +81,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
           if (feeResult.success) {
             body.delivery_fee_default = feeResult.fee || 0
+            deliveryAvailable = feeResult.rule_applied !== "none"
           }
         }
       } catch (feeError) {
         console.error("[v0] Error calculating delivery fee on update:", feeError)
         // Continue without updating fee
       }
+    }
+
+    if (hasManualFee) {
+      body.delivery_available = true
+    } else if (addressChanged) {
+      body.delivery_available = deliveryAvailable
     }
 
     const customer = await updateCustomer(id, body)

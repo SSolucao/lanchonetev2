@@ -15,7 +15,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const pattern = `%${normalized}%`
         await supabase
           .from("customers")
-          .update({ delivery_fee_default: deliveryRule.fee })
+          .update({ delivery_fee_default: deliveryRule.fee, delivery_available: true })
           .eq("restaurant_id", deliveryRule.restaurant_id)
           .ilike("neighborhood", pattern)
           .or("delivery_fee_default.is.null,delivery_fee_default.eq.0")

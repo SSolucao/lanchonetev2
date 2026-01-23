@@ -140,6 +140,7 @@ export async function GET(request: Request) {
         city: customer.city,
         complement: customer.complement,
         delivery_fee: customer.delivery_fee_default || 0,
+        delivery_available: customer.delivery_available ?? true,
       },
       active_orders: activeOrdersFormatted,
     }
@@ -285,6 +286,7 @@ export async function POST(request: Request) {
       return String(value).trim().length > 0
     })
     let delivery_fee_default = existingCustomer?.delivery_fee_default || 0
+    let delivery_available = existingCustomer?.delivery_available ?? true
     const hasCompleteAddress =
       mergedCustomer.cep && mergedCustomer.street && mergedCustomer.number && mergedCustomer.neighborhood && mergedCustomer.city
 
@@ -317,6 +319,7 @@ export async function POST(request: Request) {
 
         if (feeResult.success) {
           delivery_fee_default = feeResult.fee || 0
+          delivery_available = feeResult.rule_applied !== "none"
           console.log("[v0] Taxa calculada:", {
             distancia: feeResult.distance_km + " km",
             taxa: "R$ " + delivery_fee_default,
@@ -356,12 +359,14 @@ export async function POST(request: Request) {
         neighborhood: trimmedNeighborhood,
         city: trimmedCity,
         delivery_fee_default,
+        delivery_available,
       })
 
       const updates: Record<string, any> = {
         name,
         phone: cleanPhone,
         delivery_fee_default,
+        delivery_available,
       }
 
       if (cleanCEP) updates.cep = cleanCEP
@@ -396,6 +401,7 @@ export async function POST(request: Request) {
           phone: customer.phone,
           address: fullAddress,
           delivery_fee: customer.delivery_fee_default || 0,
+          delivery_available: customer.delivery_available ?? true,
         },
         message:
           customer.delivery_fee_default && customer.delivery_fee_default > 0
@@ -416,6 +422,7 @@ export async function POST(request: Request) {
         metadata: {
           updated: true,
           delivery_fee_default: customer.delivery_fee_default || 0,
+          delivery_available: customer.delivery_available ?? true,
           cep: cleanCEP || null,
           neighborhood: trimmedNeighborhood || null,
         },
@@ -450,6 +457,7 @@ export async function POST(request: Request) {
         complement: trimmedComplement,
         notes: trimmedNotes,
         delivery_fee_default,
+        delivery_available,
       })
       .select()
       .single()
@@ -471,6 +479,7 @@ export async function POST(request: Request) {
         phone: customer.phone,
         address: fullAddress,
         delivery_fee: delivery_fee_default,
+        delivery_available: customer.delivery_available ?? true,
       },
       message:
         delivery_fee_default > 0
@@ -491,6 +500,7 @@ export async function POST(request: Request) {
       metadata: {
         created: true,
         delivery_fee_default,
+        delivery_available,
         cep: cleanCEP || null,
         neighborhood: trimmedNeighborhood || null,
       },

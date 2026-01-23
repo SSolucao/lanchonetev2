@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     let deliveryFee = body.delivery_fee_default || 0
+    let deliveryAvailable = true
 
     if (body.cep && !body.delivery_fee_default && restaurant.address) {
       try {
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
 
           if (feeResult.success) {
             deliveryFee = feeResult.fee || 0
+            deliveryAvailable = feeResult.rule_applied !== "none"
           }
         }
       } catch (feeError) {
@@ -95,10 +97,18 @@ export async function POST(request: NextRequest) {
     }
 
     const customer = await createCustomer({
-      ...body,
+      name: body.name,
       phone: normalizedPhone,
+      cep: body.cep,
+      street: body.street,
+      number: body.number,
+      neighborhood: body.neighborhood,
+      city: body.city,
+      complement: body.complement,
+      notes: body.notes,
       restaurant_id: restaurant.id,
       delivery_fee_default: deliveryFee,
+      delivery_available: deliveryAvailable,
     })
 
     return NextResponse.json(customer)

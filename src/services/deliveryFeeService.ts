@@ -128,16 +128,6 @@ export async function getFeeByDistance(
       }
     }
 
-    // Se a distância for maior que todas as regras, usa a última
-    const lastRule = distanceRules[distanceRules.length - 1]
-    if (distanceKm >= Number.parseFloat(lastRule.from_km)) {
-      console.log("[v0] Using last rule for distance:", distanceKm)
-      return {
-        fee: Number.parseFloat(lastRule.fee),
-        rule_applied: `${lastRule.from_km}+ km`,
-      }
-    }
-
     console.log("[v0] No rule found for distance:", distanceKm)
     return null
   } catch (error) {

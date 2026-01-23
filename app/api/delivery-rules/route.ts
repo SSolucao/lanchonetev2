@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         const pattern = `%${normalized}%`
         await supabase
           .from("customers")
-          .update({ delivery_fee_default: deliveryRule.fee })
+          .update({ delivery_fee_default: deliveryRule.fee, delivery_available: true })
           .eq("restaurant_id", restaurant.id)
           .ilike("neighborhood", pattern)
           .or("delivery_fee_default.is.null,delivery_fee_default.eq.0")

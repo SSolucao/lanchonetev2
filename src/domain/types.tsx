@@ -53,6 +53,7 @@ export interface Customer {
   complement: string | null
   notes: string | null
   delivery_fee_default?: number | null
+  delivery_available?: boolean | null
   created_at: string
   updated_at: string
 }
@@ -251,6 +252,8 @@ export interface CreateCustomerInput {
   city?: string
   complement?: string
   notes?: string
+  delivery_fee_default?: number | null
+  delivery_available?: boolean | null
 }
 
 export interface CreateProductInput {

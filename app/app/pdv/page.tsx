@@ -490,6 +490,14 @@ export default function PdvPage() {
     }
 
     const isDeliveryOrder = draft.tipoPedido === "ENTREGA"
+    if (isDeliveryOrder && draft.customer?.delivery_available === false) {
+      toast({
+        variant: "destructive",
+        title: "Entrega indisponível",
+        description: "Cadastre uma taxa por bairro ou informe o CEP para calcular por KM.",
+      })
+      return
+    }
     if (
       isDeliveryOrder &&
       (!draft.customer.cep ||
@@ -651,6 +659,7 @@ export default function PdvPage() {
   const effectiveComandaId = comandaId || selectedComandaId
   const isComandaFlow = Boolean(effectiveComandaId)
   const isEntrega = draft.tipoPedido === "ENTREGA"
+  const deliveryBlocked = Boolean(isEntrega && draft.customer && draft.customer.delivery_available === false)
 
   // Sempre que seleciona cliente ou muda para entrega, aplica taxa padrão do cliente
   useEffect(() => {
@@ -658,6 +667,18 @@ export default function PdvPage() {
       setDeliveryFee(draft.customer.delivery_fee_default || 0)
     }
   }, [isEntrega, draft.customer, setDeliveryFee])
+
+  useEffect(() => {
+    if (!draft.customer) return
+
+    if (draft.tipoPedido === "ENTREGA" && draft.customer.delivery_available === false) {
+      setTipoPedido("RETIRADA")
+      toast({
+        title: "Entrega indisponível",
+        description: "Cliente sem entrega disponível. Tipo alterado para Retirada.",
+      })
+    }
+  }, [draft.customer, draft.tipoPedido, setTipoPedido, toast])
 
   useEffect(() => {
     if (!isEntrega) {
@@ -948,13 +969,15 @@ export default function PdvPage() {
                       >
                         Retirada
                       </Button>
-                      <Button
-                        variant={draft.tipoPedido === "ENTREGA" ? "default" : "outline"}
-                        className="flex-1"
-                        onClick={() => setTipoPedido("ENTREGA")}
-                      >
-                        Entrega
-                      </Button>
+                      {!deliveryBlocked && (
+                        <Button
+                          variant={draft.tipoPedido === "ENTREGA" ? "default" : "outline"}
+                          className="flex-1"
+                          onClick={() => setTipoPedido("ENTREGA")}
+                        >
+                          Entrega
+                        </Button>
+                      )}
                     </div>
                   )}
 
@@ -1110,6 +1133,11 @@ export default function PdvPage() {
                         onChange={(e) => setDeliveryFee(Number.parseFloat(e.target.value) || 0)}
                       />
                     </div>
+                    {deliveryBlocked && (
+                      <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        Entrega indisponível para este cliente. Cadastre uma taxa por bairro ou use CEP para KM.
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1163,6 +1191,7 @@ export default function PdvPage() {
                     draft.items.length === 0 ||
                     (!draft.customer && !isComandaFlow) ||
                     (!draft.paymentMethodId && !isComandaFlow) ||
+                    deliveryBlocked ||
                     isCreatingOrder
                   }
                 >
