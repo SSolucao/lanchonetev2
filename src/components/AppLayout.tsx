@@ -42,8 +42,15 @@ const navigationItems = [
   },
   {
     name: "Configurações",
-    href: "/app/configuracoes",
+    href: "/app/configuracoes/estabelecimento",
     icon: Settings,
+    children: [
+      { name: "Estabelecimento", href: "/app/configuracoes/estabelecimento" },
+      { name: "Formas de pagamento", href: "/app/configuracoes/formas-de-pagamento" },
+      { name: "Regras de entrega", href: "/app/configuracoes/regras-de-entrega" },
+      { name: "Horários", href: "/app/configuracoes/horarios" },
+      { name: "Impressão", href: "/app/configuracoes/impressao" },
+    ],
   },
 ]
 
@@ -63,22 +70,44 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 p-4 space-y-1">
           {navigationItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || (item.children && pathname.startsWith("/app/configuracoes"))
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              <div key={item.href} className="space-y-1">
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  {item.name}
+                </Link>
+                {item.children && isActive && (
+                  <div className="ml-8 space-y-1">
+                    {item.children.map((child) => {
+                      const isChildActive = pathname === child.href
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          className={cn(
+                            "flex items-center px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                            isChildActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                          )}
+                        >
+                          {child.name}
+                        </Link>
+                      )
+                    })}
+                  </div>
                 )}
-              >
-                <Icon className="w-5 h-5" />
-                {item.name}
-              </Link>
+              </div>
             )
           })}
         </nav>
