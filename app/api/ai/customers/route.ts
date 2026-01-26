@@ -287,6 +287,7 @@ export async function POST(request: Request) {
     })
     let delivery_fee_default = existingCustomer?.delivery_fee_default || 0
     let delivery_available = existingCustomer?.delivery_available ?? true
+    let delivery_rule_applied: string | null = null
     const hasCompleteAddress =
       mergedCustomer.cep && mergedCustomer.street && mergedCustomer.number && mergedCustomer.neighborhood && mergedCustomer.city
 
@@ -320,6 +321,7 @@ export async function POST(request: Request) {
         if (feeResult.success) {
           delivery_fee_default = feeResult.fee || 0
           delivery_available = feeResult.rule_applied !== "none"
+          delivery_rule_applied = feeResult.rule_applied
           console.log("[v0] Taxa calculada:", {
             distancia: feeResult.distance_km + " km",
             taxa: "R$ " + delivery_fee_default,
@@ -392,6 +394,13 @@ export async function POST(request: Request) {
 
       console.log("[v0] Cliente atualizado com sucesso:", customer.id)
 
+      const responseMessage =
+        delivery_rule_applied === "none"
+          ? "Entrega indisponivel para este endereco. Valor de entrega 0; nao podemos fazer entrega para esse cliente no momento."
+          : customer.delivery_fee_default && customer.delivery_fee_default > 0
+            ? `Cadastro atualizado! Taxa de entrega: R$ ${customer.delivery_fee_default.toFixed(2)}`
+            : "Cadastro atualizado! Taxa de entrega nao calculada (endereco incompleto)"
+
       const response = {
         success: true,
         updated: true,
@@ -403,10 +412,7 @@ export async function POST(request: Request) {
           delivery_fee: customer.delivery_fee_default || 0,
           delivery_available: customer.delivery_available ?? true,
         },
-        message:
-          customer.delivery_fee_default && customer.delivery_fee_default > 0
-            ? `Cadastro atualizado! Taxa de entrega: R$ ${customer.delivery_fee_default.toFixed(2)}`
-            : "Cadastro atualizado! Taxa de entrega não calculada (endereço incompleto)",
+        message: responseMessage,
         rule_applied: customer.delivery_fee_default && customer.delivery_fee_default > 0 ? "bairro ou km aplicado" : "nenhuma regra aplicada",
       }
 
@@ -470,6 +476,13 @@ export async function POST(request: Request) {
 
     console.log("[v0] Cliente criado com sucesso:", customer.id)
 
+    const responseMessage =
+      delivery_rule_applied === "none"
+        ? "Entrega indisponivel para este endereco. Valor de entrega 0; nao podemos fazer entrega para esse cliente no momento."
+        : delivery_fee_default > 0
+          ? `Cliente cadastrado! Taxa de entrega: R$ ${delivery_fee_default.toFixed(2)}`
+          : "Cliente cadastrado! Taxa de entrega nao calculada (endereco incompleto)"
+
     const response = {
       success: true,
       created: true,
@@ -481,10 +494,7 @@ export async function POST(request: Request) {
         delivery_fee: delivery_fee_default,
         delivery_available: customer.delivery_available ?? true,
       },
-      message:
-        delivery_fee_default > 0
-          ? `Cliente cadastrado! Taxa de entrega: R$ ${delivery_fee_default.toFixed(2)}`
-          : "Cliente cadastrado! Taxa de entrega não calculada (endereço incompleto)",
+      message: responseMessage,
       rule_applied: delivery_fee_default > 0 ? "bairro ou km aplicado" : "nenhuma regra aplicada",
     }
 

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentRestaurant, updateRestaurant } from "@/src/services/restaurantsService"
+import { getCurrentRestaurant, updateRestaurant, upsertBusinessHours } from "@/src/services/restaurantsService"
 
 export async function GET() {
   try {
@@ -22,8 +22,17 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const updatedRestaurant = await updateRestaurant(restaurant.id, body)
-    return NextResponse.json(updatedRestaurant)
+    const { business_hours: businessHours, ...updates } = body ?? {}
+
+    if (businessHours) {
+      await upsertBusinessHours(restaurant.id, businessHours)
+    }
+
+    const updatedRestaurant =
+      updates && Object.keys(updates).length > 0 ? await updateRestaurant(restaurant.id, updates) : restaurant
+
+    const refreshedRestaurant = await getCurrentRestaurant()
+    return NextResponse.json(refreshedRestaurant ?? updatedRestaurant)
   } catch (error) {
     console.error("Error updating restaurant:", error)
     return NextResponse.json({ error: "Failed to update restaurant" }, { status: 500 })

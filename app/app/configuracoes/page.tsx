@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   AlertDialog,
@@ -25,6 +26,24 @@ import { DeliveryRuleFormDialog } from "@/src/components/DeliveryRuleFormDialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { listPrinters, printCupom } from "@/src/lib/print/qzClient"
+
+type BusinessHourInterval = { start: string; end: string }
+type BusinessHourDay = {
+  weekday: number
+  label: string
+  is_open: boolean
+  intervals: BusinessHourInterval[]
+}
+
+const DEFAULT_BUSINESS_HOURS: BusinessHourDay[] = [
+  { weekday: 0, label: "Domingo", is_open: false, intervals: [] },
+  { weekday: 1, label: "Segunda-feira", is_open: false, intervals: [] },
+  { weekday: 2, label: "Terça-feira", is_open: false, intervals: [] },
+  { weekday: 3, label: "Quarta-feira", is_open: false, intervals: [] },
+  { weekday: 4, label: "Quinta-feira", is_open: false, intervals: [] },
+  { weekday: 5, label: "Sexta-feira", is_open: false, intervals: [] },
+  { weekday: 6, label: "Sábado", is_open: false, intervals: [] },
+]
 
 export default function ConfiguracoesPage() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
@@ -71,6 +90,10 @@ export default function ConfiguracoesPage() {
   const [pixKey, setPixKey] = useState("")
   const [pixBankName, setPixBankName] = useState("")
   const [pixAccountHolder, setPixAccountHolder] = useState("")
+  const [businessHours, setBusinessHours] = useState<BusinessHourDay[]>(
+    DEFAULT_BUSINESS_HOURS.map((day) => ({ ...day, intervals: [...day.intervals] })),
+  )
+  const [savingHours, setSavingHours] = useState(false)
 
   const charsetOptions = [
     { label: "Português (recomendado)", encoding: "CP860", codePage: 3 },
@@ -113,6 +136,123 @@ export default function ConfiguracoesPage() {
     neighborhoodPageSafe * PAGE_SIZE,
   )
   const distancePageItems = distanceRules.slice((distancePageSafe - 1) * PAGE_SIZE, distancePageSafe * PAGE_SIZE)
+
+  function handleToggleBusinessDay(weekday: number, isOpen: boolean) {
+    setBusinessHours((prev) =>
+      prev.map((day) =>
+        day.weekday === weekday
+          ? {
+              ...day,
+              is_open: isOpen,
+              intervals: isOpen && day.intervals.length === 0 ? [{ start: "09:00", end: "18:00" }] : day.intervals,
+            }
+          : day,
+      ),
+    )
+  }
+
+  function handleBusinessIntervalChange(
+    weekday: number,
+    index: number,
+    field: "start" | "end",
+    value: string,
+  ) {
+    setBusinessHours((prev) =>
+      prev.map((day) => {
+        if (day.weekday !== weekday) return day
+        const intervals = day.intervals.map((interval, intervalIndex) =>
+          intervalIndex === index ? { ...interval, [field]: value } : interval,
+        )
+        return { ...day, intervals }
+      }),
+    )
+  }
+
+  function handleAddBusinessInterval(weekday: number) {
+    setBusinessHours((prev) =>
+      prev.map((day) =>
+        day.weekday === weekday
+          ? { ...day, intervals: [...day.intervals, { start: "", end: "" }] }
+          : day,
+      ),
+    )
+  }
+
+  function handleRemoveBusinessInterval(weekday: number, index: number) {
+    setBusinessHours((prev) =>
+      prev.map((day) => {
+        if (day.weekday !== weekday) return day
+        const intervals = day.intervals.filter((_, intervalIndex) => intervalIndex !== index)
+        return { ...day, intervals }
+      }),
+    )
+  }
+
+  function getBusinessDayIssue(day: BusinessHourDay) {
+    if (!day.is_open) return null
+    if (day.intervals.length === 0) return "Adicione ao menos um intervalo."
+    const parsed = day.intervals
+      .map((interval) => {
+        if (!interval.start || !interval.end) return null
+        const [startHour, startMinute] = interval.start.split(":").map(Number)
+        const [endHour, endMinute] = interval.end.split(":").map(Number)
+        if (Number.isNaN(startHour) || Number.isNaN(startMinute) || Number.isNaN(endHour) || Number.isNaN(endMinute)) {
+          return null
+        }
+        const start = startHour * 60 + startMinute
+        const end = endHour * 60 + endMinute
+        return { start, end }
+      })
+      .filter(Boolean) as Array<{ start: number; end: number }>
+
+    for (const interval of day.intervals) {
+      if (!interval.start || !interval.end) return "Preencha inicio e fim."
+      if (interval.start >= interval.end) return "Inicio deve ser antes do fim."
+    }
+
+    const ordered = parsed.slice().sort((a, b) => a.start - b.start)
+    for (let i = 1; i < ordered.length; i += 1) {
+      if (ordered[i].start < ordered[i - 1].end) return "Intervalos sobrepostos."
+    }
+
+    return null
+  }
+
+  function normalizeBusinessHoursFromApi(input: any): BusinessHourDay[] {
+    const apiHours = Array.isArray(input) ? input : []
+    return DEFAULT_BUSINESS_HOURS.map((day) => {
+      const apiDay = apiHours.find((entry: any) => entry?.weekday === day.weekday)
+      return {
+        ...day,
+        is_open: Boolean(apiDay?.is_open),
+        intervals: Array.isArray(apiDay?.intervals) ? apiDay.intervals : [],
+      }
+    })
+  }
+
+  async function handleSaveBusinessHours() {
+    try {
+      setSavingHours(true)
+      const payload = businessHours.map((day) => ({
+        weekday: day.weekday,
+        is_open: day.is_open,
+        intervals: day.intervals,
+      }))
+      const res = await fetch("/api/restaurant", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ business_hours: payload }),
+      })
+      if (!res.ok) throw new Error("Failed to save business hours")
+      const data = await res.json()
+      setBusinessHours(normalizeBusinessHoursFromApi(data?.business_hours))
+    } catch (error) {
+      console.error("Error saving business hours:", error)
+      alert("Erro ao salvar horários")
+    } finally {
+      setSavingHours(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -205,6 +345,7 @@ export default function ConfiguracoesPage() {
         setPixKey(restaurantData.pix_key || "")
         setPixBankName(restaurantData.pix_bank_name || "")
         setPixAccountHolder(restaurantData.pix_account_holder || "")
+        setBusinessHours(normalizeBusinessHoursFromApi(restaurantData.business_hours))
       }
 
       if (paymentRes.ok) {
@@ -670,6 +811,7 @@ export default function ConfiguracoesPage() {
           <TabsTrigger value="restaurant">Estabelecimento</TabsTrigger>
           <TabsTrigger value="payment">Formas de pagamento</TabsTrigger>
           <TabsTrigger value="delivery">Regras de entrega</TabsTrigger>
+          <TabsTrigger value="hours">Horários</TabsTrigger>
           <TabsTrigger value="printer">Impressão</TabsTrigger>
         </TabsList>
 
@@ -1081,6 +1223,94 @@ export default function ConfiguracoesPage() {
                   </Button>
                 </div>
               )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="hours">
+          <div className="border rounded-lg p-6 space-y-4">
+            <div>
+              <h2 className="text-xl font-semibold">Horário de funcionamento</h2>
+              <p className="text-sm text-muted-foreground">
+                Defina os dias abertos e os intervalos de atendimento.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {businessHours.map((day) => {
+                const issue = getBusinessDayIssue(day)
+                return (
+                  <div key={day.weekday} className="border rounded-lg p-4 space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-medium">{day.label}</p>
+                        <p className="text-xs text-muted-foreground">{day.is_open ? "Aberto" : "Fechado"}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={day.is_open} onCheckedChange={(checked) => handleToggleBusinessDay(day.weekday, checked)} />
+                        <span className="text-sm">{day.is_open ? "Aberto" : "Fechado"}</span>
+                      </div>
+                    </div>
+
+                    {day.is_open ? (
+                      <div className="space-y-3">
+                        {day.intervals.map((interval, index) => (
+                          <div
+                            key={`${day.weekday}-${index}`}
+                            className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end"
+                          >
+                            <div className="space-y-2">
+                              <Label>Início</Label>
+                              <Input
+                                type="time"
+                                value={interval.start}
+                                onChange={(e) => handleBusinessIntervalChange(day.weekday, index, "start", e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Fim</Label>
+                              <Input
+                                type="time"
+                                value={interval.end}
+                                onChange={(e) => handleBusinessIntervalChange(day.weekday, index, "end", e.target.value)}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => handleRemoveBusinessInterval(day.weekday, index)}
+                              disabled={day.intervals.length === 1}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+
+                        <div className="flex items-center justify-between">
+                          <Button type="button" variant="outline" size="sm" onClick={() => handleAddBusinessInterval(day.weekday)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Adicionar intervalo
+                          </Button>
+                          {issue && <p className="text-xs text-destructive">{issue}</p>}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Fechado neste dia.</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" type="button" onClick={loadData} disabled={savingHours}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSaveBusinessHours} disabled={savingHours}>
+                {savingHours ? "Salvando..." : "Salvar horários"}
+              </Button>
             </div>
           </div>
         </TabsContent>

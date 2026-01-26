@@ -40,6 +40,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       consumption_eta_max: restaurant.consumption_eta_max ?? null,
       pix_bank_name: restaurant.pix_bank_name ?? null,
       pix_account_holder: restaurant.pix_account_holder ?? null,
+      business_hours: restaurant.business_hours ?? [],
       payment_methods: paymentMethods || [],
     }
 

@@ -23,8 +23,16 @@ export interface Restaurant {
   pix_key: string | null
   pix_bank_name: string | null
   pix_account_holder: string | null
+  business_hours?: BusinessHour[]
   created_at: string
   updated_at: string
+}
+
+export interface BusinessHour {
+  restaurant_id?: string
+  weekday: number
+  is_open: boolean
+  intervals: Array<{ start: string; end: string }>
 }
 
 export type UserRole = "OWNER" | "ATTENDANT" | "KITCHEN" | "VIEW_ONLY"
