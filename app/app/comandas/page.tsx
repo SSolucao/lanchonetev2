@@ -100,6 +100,10 @@ export default function ComandasPage() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([])
   const [isClosing, setIsClosing] = useState(false)
 
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [detailsComanda, setDetailsComanda] = useState<Comanda | null>(null)
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false)
+
   useEffect(() => {
     fetchComandas()
     fetchProducts()
@@ -223,6 +227,30 @@ export default function ComandasPage() {
     setSelectedCategory("Todos")
     setProductSearchTerm("")
     setIsAddProductsOpen(true)
+  }
+
+  const handleOpenDetails = async (comanda: Comanda) => {
+    setIsDetailsOpen(true)
+    setIsDetailsLoading(true)
+    try {
+      const res = await fetch(`/api/comandas/${comanda.id}`)
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null)
+        throw new Error(errorData?.error || "Failed to fetch comanda")
+      }
+      const data = await res.json()
+      setDetailsComanda(data)
+    } catch (error) {
+      console.error("[v0] Error fetching comanda details:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os detalhes da comanda",
+        variant: "destructive",
+      })
+      setIsDetailsOpen(false)
+    } finally {
+      setIsDetailsLoading(false)
+    }
   }
 
   const addToCart = (product: Product) => {
@@ -591,7 +619,11 @@ export default function ComandasPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {comandasAbertas.map((comanda) => (
-              <Card key={comanda.id} className="hover:shadow-lg transition-shadow">
+              <Card
+                key={comanda.id}
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => handleOpenDetails(comanda)}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between">
                     <span className="text-lg">Comanda #{String(comanda.numero).padStart(3, "0")}</span>
@@ -629,12 +661,22 @@ export default function ComandasPage() {
                     <Button
                       variant="outline"
                       className="flex-1 bg-transparent"
-                      onClick={() => handleOpenAddProducts(comanda)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleOpenAddProducts(comanda)
+                      }}
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       Pedido
                     </Button>
-                    <Button variant="default" className="flex-1" onClick={() => handleFecharComanda(comanda)}>
+                    <Button
+                      variant="default"
+                      className="flex-1"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleFecharComanda(comanda)
+                      }}
+                    >
                       Fechar
                     </Button>
                   </div>
@@ -656,7 +698,11 @@ export default function ComandasPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {comandasFechadas.map((comanda) => (
-              <Card key={comanda.id} className="opacity-75">
+              <Card
+                key={comanda.id}
+                className="opacity-75 cursor-pointer hover:shadow-sm transition-shadow"
+                onClick={() => handleOpenDetails(comanda)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold">#{String(comanda.numero).padStart(3, "0")}</span>
@@ -855,6 +901,117 @@ export default function ComandasPage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isDetailsOpen}
+        onOpenChange={(open) => {
+          setIsDetailsOpen(open)
+          if (!open) setDetailsComanda(null)
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Detalhes da Comanda</DialogTitle>
+          </DialogHeader>
+
+          {isDetailsLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+
+          {!isDetailsLoading && detailsComanda && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Comanda</p>
+                  <p className="text-lg font-semibold">#{String(detailsComanda.numero).padStart(3, "0")}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Mesa</p>
+                  <p className="text-lg font-semibold">{detailsComanda.mesa}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <span className="inline-flex px-2 py-1 rounded text-xs bg-muted">
+                    {detailsComanda.status === "ABERTA" ? "Aberta" : "Fechada"}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="text-lg font-semibold">R$ {detailsComanda.total.toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 text-sm text-muted-foreground">
+                <div>
+                  <strong className="text-foreground">Cliente:</strong>{" "}
+                  {detailsComanda.customer_name || "Não informado"}
+                </div>
+                <div>
+                  <strong className="text-foreground">Abertura:</strong>{" "}
+                  {new Date(detailsComanda.opened_at).toLocaleString("pt-BR")}
+                </div>
+                {detailsComanda.closed_at && (
+                  <div>
+                    <strong className="text-foreground">Fechamento:</strong>{" "}
+                    {new Date(detailsComanda.closed_at).toLocaleString("pt-BR")}
+                  </div>
+                )}
+                <div>
+                  <strong className="text-foreground">Pedidos:</strong> {detailsComanda.orders?.length || 0}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-semibold">Itens consumidos</h4>
+                {detailsComanda.orders?.length ? (
+                  <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                    {detailsComanda.orders.map((pedido) => (
+                      <div key={pedido.id} className="rounded-lg border p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <div className="font-medium">Pedido #{pedido.order_number}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(pedido.created_at).toLocaleString("pt-BR")}
+                          </div>
+                          <div className="font-semibold">R$ {pedido.total.toFixed(2)}</div>
+                        </div>
+                        {pedido.items && pedido.items.length > 0 ? (
+                          <div className="space-y-1 text-sm text-muted-foreground">
+                            {pedido.items.map((item, index) => (
+                              <div key={`${pedido.id}-${index}`} className="flex justify-between gap-2">
+                                <span>
+                                  {item.quantity}x {item.product_name}
+                                  {item.notes ? ` (${item.notes})` : ""}
+                                </span>
+                                <span>R$ {(item.unit_price * item.quantity).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Sem itens neste pedido.</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum pedido registrado nesta comanda.</p>
+                )}
+              </div>
+
+              {detailsComanda.status === "ABERTA" && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsDetailsOpen(false)
+                      handleOpenAddProducts(detailsComanda)
+                    }}
+                  >
+                    Adicionar pedido
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
