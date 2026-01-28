@@ -310,7 +310,7 @@ export const buildEscposFromOrder = (order: any): string[] => {
   const tipoPedidoLabel = () => {
     switch (order?.tipo_pedido) {
       case "BALCAO":
-        return "BALCÃO"
+        return "CONSUMO"
       case "RETIRADA":
         return "RETIRADA"
       case "ENTREGA":
@@ -322,7 +322,7 @@ export const buildEscposFromOrder = (order: any): string[] => {
             }`
           : "COMANDA"
       default:
-        if (order?.channel === "BALCAO") return "BALCÃO"
+        if (order?.channel === "BALCAO") return "CONSUMO"
         if (order?.delivery_mode === "RETIRA") return "RETIRADA"
         return "ENTREGA"
     }

@@ -26,7 +26,7 @@ export async function buildOrderPdfBuffer(orderId: string): Promise<Buffer> {
   const tipoLabel = (() => {
     switch (order.tipo_pedido) {
       case "BALCAO":
-        return "BALCÃO"
+        return "CONSUMO"
       case "RETIRADA":
         return "RETIRADA"
       case "ENTREGA":

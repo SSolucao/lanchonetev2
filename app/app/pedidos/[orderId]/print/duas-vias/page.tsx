@@ -77,7 +77,7 @@ export default function DualPrintPage({ params }: PageProps) {
   const tipoPedidoLabel = () => {
     switch (order.tipo_pedido) {
       case "BALCAO":
-        return "Balcão"
+        return "Consumo"
       case "RETIRADA":
         return "Retirada"
       case "ENTREGA":
@@ -85,7 +85,7 @@ export default function DualPrintPage({ params }: PageProps) {
       case "COMANDA":
         return order.comanda ? `Comanda #${String(order.comanda.numero).padStart(3, "0")}` : "Comanda"
       default:
-        if (order.channel === "BALCAO") return "Balcão"
+        if (order.channel === "BALCAO") return "Consumo"
         if (order.delivery_mode === "RETIRA") return "Retirada"
         return "Entrega"
     }
@@ -202,7 +202,7 @@ export default function DualPrintPage({ params }: PageProps) {
             <div className="text-center mb-4 border-b-2 border-black p-4 pb-3">
               <h1 className="text-xl font-bold mb-1">{order.restaurant?.name}</h1>
               {order.restaurant?.address && <p className="text-xs text-gray-700">{order.restaurant.address}</p>}
-              <p className="text-lg font-semibold mt-2">CUPOM DE BALCÃO</p>
+              <p className="text-lg font-semibold mt-2">CUPOM DE CONSUMO</p>
             </div>
 
             <div className="px-6 pb-6 space-y-4 text-sm">

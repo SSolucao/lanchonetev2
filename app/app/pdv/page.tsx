@@ -973,7 +973,7 @@ export default function PdvPage() {
                         className="flex-1"
                         onClick={() => setTipoPedido("BALCAO")}
                       >
-                        Balcão
+                        Consumo
                       </Button>
                       <Button
                         variant={draft.tipoPedido === "RETIRADA" ? "default" : "outline"}

@@ -70,7 +70,7 @@ export default function KitchenPrintPage({ params }: PageProps) {
   const tipoPedidoLabel = () => {
     switch (order.tipo_pedido) {
       case "BALCAO":
-        return "BALCÃO"
+        return "CONSUMO"
       case "RETIRADA":
         return "RETIRADA"
       case "ENTREGA":
@@ -81,7 +81,7 @@ export default function KitchenPrintPage({ params }: PageProps) {
           : "COMANDA"
       default:
         // Fallback for old orders
-        if (order.channel === "BALCAO") return "BALCÃO"
+        if (order.channel === "BALCAO") return "CONSUMO"
         if (order.delivery_mode === "RETIRA") return "RETIRADA"
         return "ENTREGA"
     }

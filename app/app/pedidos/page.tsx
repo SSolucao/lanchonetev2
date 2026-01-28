@@ -98,7 +98,7 @@ export default function PedidosPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Todos</SelectItem>
-              <SelectItem value="BALCAO">Balcão</SelectItem>
+              <SelectItem value="BALCAO">Consumo</SelectItem>
               <SelectItem value="DELIVERY">Delivery</SelectItem>
             </SelectContent>
           </Select>

@@ -70,7 +70,7 @@ export default function CustomerPrintPage({ params }: PageProps) {
   const tipoPedidoLabel = () => {
     switch (order.tipo_pedido) {
       case "BALCAO":
-        return "Balcão"
+        return "Consumo"
       case "RETIRADA":
         return "Retirada"
       case "ENTREGA":
@@ -79,7 +79,7 @@ export default function CustomerPrintPage({ params }: PageProps) {
         return `Comanda ${order.comanda?.numero || ""}`
       default:
         // Fallback for old orders
-        if (order.channel === "BALCAO") return "Balcão"
+        if (order.channel === "BALCAO") return "Consumo"
         if (order.delivery_mode === "RETIRA") return "Retirada no balcão"
         return "Entrega"
     }

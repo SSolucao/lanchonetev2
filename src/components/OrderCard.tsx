@@ -58,7 +58,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
   const tipoPedidoLabel = () => {
     switch (order.tipo_pedido) {
       case "BALCAO":
-        return "Balcão"
+        return "Consumo"
       case "RETIRADA":
         return "Retirada"
       case "ENTREGA":
@@ -69,7 +69,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
           : "Comanda"
       default:
         // Fallback for old orders
-        if (order.channel === "BALCAO") return "Balcão"
+        if (order.channel === "BALCAO") return "Consumo"
         if (order.delivery_mode === "RETIRA") return "Retirada"
         return "Entrega"
     }

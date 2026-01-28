@@ -553,7 +553,7 @@ export default function ComandasPage() {
                   <Label htmlFor="mesa">Mesa *</Label>
                   <Input
                     id="mesa"
-                    placeholder="Ex: Mesa 5, Balcão 2, Varanda"
+                    placeholder="Ex: Mesa 5, Consumo 2, Varanda"
                     value={mesa}
                     onChange={(e) => setMesa(e.target.value)}
                   />
