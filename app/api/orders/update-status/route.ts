@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Notificações WhatsApp
-    if (newStatus === "EM_PREPARO" || newStatus === "SAIU_PARA_ENTREGA") {
+    if (newStatus === "EM_PREPARO" || newStatus === "SAIU_PARA_ENTREGA" || newStatus === "FINALIZADO") {
       try {
         const { data: orderData, error: orderError } = await supabase
           .from("orders")
@@ -111,6 +111,9 @@ export async function POST(request: NextRequest) {
             `
             id,
             order_number,
+            tipo_pedido,
+            channel,
+            delivery_mode,
             restaurant:restaurants(name),
             customer:customers(name, phone)
           `,
@@ -148,6 +151,20 @@ export async function POST(request: NextRequest) {
               text,
               choices,
             }).catch((err) => console.error("[v0] Error sending WhatsApp menu:", err))
+          }
+
+          if (newStatus === "FINALIZADO" && oldStatus !== "FINALIZADO") {
+            const isRetirada = orderData.tipo_pedido === "RETIRADA" || orderData.delivery_mode === "RETIRA"
+
+            if (isRetirada) {
+              const text = `Olá${customerName ? `, ${customerName}` : ""}! Seu pedido #${
+                orderData.order_number
+              } está pronto para retirada. Obrigado! – ${restaurantName}`
+
+              sendWhatsAppText({ number: orderData.customer.phone, text }).catch((err) =>
+                console.error("[v0] Error sending WhatsApp message:", err),
+              )
+            }
           }
         }
       } catch (err) {
