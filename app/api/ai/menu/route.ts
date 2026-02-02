@@ -109,6 +109,7 @@ export async function GET() {
           category: p.category,
           price: p.price,
           description: p.description || "",
+          url_image: p.url_image || null,
           ingredients: productRecipes.map((r) => {
             const item = (stockItems || []).find((s) => s.id === r.stock_item_id)
             return {
@@ -127,6 +128,7 @@ export async function GET() {
           category: c.category,
           price: c.price,
           description: c.description || "",
+          url_image: c.url_image || null,
           items: comboProducts.map((ci) => {
             const product = (products || []).find((p) => p.id === ci.product_id)
             return {
