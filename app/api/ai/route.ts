@@ -6,6 +6,8 @@ export async function GET() {
     message: "AI API endpoints available",
     endpoints: [
       "GET /api/ai/menu - Get restaurant menu",
+      "GET /api/ai/menu-documents - List uploaded menu documents",
+      "POST /api/ai/menu-documents - Upload menu document (PDF/image)",
       "GET /api/ai/customers?phone=XXX - Find customer by phone",
       "POST /api/ai/customers - Create or update customer by phone",
       "POST /api/ai/orders - Create new order",

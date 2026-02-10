@@ -50,6 +50,7 @@ const navigationItems = [
       { name: "Regras de entrega", href: "/app/configuracoes/regras-de-entrega" },
       { name: "Horários", href: "/app/configuracoes/horarios" },
       { name: "Impressão", href: "/app/configuracoes/impressao" },
+      { name: "Cardápio IA", href: "/app/configuracoes/cardapio-ia" },
     ],
   },
 ]

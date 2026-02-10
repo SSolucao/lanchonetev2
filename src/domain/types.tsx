@@ -129,6 +129,18 @@ export interface DeliveryRule {
   updated_at: string
 }
 
+export interface MenuDocument {
+  id: string
+  restaurant_id: string
+  file_name: string
+  storage_path: string
+  mime_type: string
+  file_size: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type OrderChannel = "BALCAO" | "DELIVERY"
 export type DeliveryMode = "NONE" | "RETIRA" | "ENTREGA"
 export type TipoPedido = "BALCAO" | "RETIRADA" | "ENTREGA" | "COMANDA"

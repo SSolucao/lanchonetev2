@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import type { Restaurant, PaymentMethod, DeliveryRule } from "@/src/domain/types"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Pencil, Plus, Trash2, Upload, Star } from "lucide-react"
 import { PaymentMethodFormDialog } from "@/src/components/PaymentMethodFormDialog"
 import { DeliveryRuleFormDialog } from "@/src/components/DeliveryRuleFormDialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -34,6 +34,15 @@ type BusinessHourDay = {
   is_open: boolean
   intervals: BusinessHourInterval[]
 }
+type MenuDocument = {
+  id: string
+  file_name: string
+  mime_type: string
+  file_size: number
+  is_active: boolean
+  created_at: string
+  download_url?: string | null
+}
 
 const DEFAULT_BUSINESS_HOURS: BusinessHourDay[] = [
   { weekday: 0, label: "Domingo", is_open: false, intervals: [] },
@@ -45,12 +54,13 @@ const DEFAULT_BUSINESS_HOURS: BusinessHourDay[] = [
   { weekday: 6, label: "Sábado", is_open: false, intervals: [] },
 ]
 
-const SECTION_MAP: Record<string, "restaurant" | "payment" | "delivery" | "hours" | "printer"> = {
+const SECTION_MAP: Record<string, "restaurant" | "payment" | "delivery" | "hours" | "printer" | "aiMenu"> = {
   estabelecimento: "restaurant",
   "formas-de-pagamento": "payment",
   "regras-de-entrega": "delivery",
   horarios: "hours",
   impressao: "printer",
+  "cardapio-ia": "aiMenu",
 }
 
 export default function ConfiguracoesPage() {
@@ -130,6 +140,11 @@ export default function ConfiguracoesPage() {
   const [neighborhoodPage, setNeighborhoodPage] = useState(1)
   const [distancePage, setDistancePage] = useState(1)
   const [neighborhoodSearch, setNeighborhoodSearch] = useState("")
+  const [menuDocuments, setMenuDocuments] = useState<MenuDocument[]>([])
+  const [selectedMenuFile, setSelectedMenuFile] = useState<File | null>(null)
+  const [uploadingMenuFile, setUploadingMenuFile] = useState(false)
+  const [processingMenuFileId, setProcessingMenuFileId] = useState<string | null>(null)
+  const [menuFileInputKey, setMenuFileInputKey] = useState(0)
 
   const PAGE_SIZE = 5
   const neighborhoodRules = deliveryRules.filter((rule) => rule.neighborhood)
@@ -317,13 +332,26 @@ export default function ConfiguracoesPage() {
     setNeighborhoodPage(1)
   }, [normalizedNeighborhoodSearch])
 
+  function formatFileSize(bytes: number) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B"
+    const units = ["B", "KB", "MB", "GB"]
+    let value = bytes
+    let unitIndex = 0
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024
+      unitIndex += 1
+    }
+    return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+  }
+
   async function loadData() {
     try {
       setLoading(true)
-      const [restaurantRes, paymentRes, deliveryRes] = await Promise.all([
+      const [restaurantRes, paymentRes, deliveryRes, menuDocsRes] = await Promise.all([
         fetch("/api/restaurant"),
         fetch("/api/payment-methods"),
         fetch("/api/delivery-rules"),
+        fetch("/api/ai/menu-documents"),
       ])
 
       if (restaurantRes.ok) {
@@ -367,6 +395,11 @@ export default function ConfiguracoesPage() {
       if (deliveryRes.ok) {
         const deliveryData = await deliveryRes.json()
         setDeliveryRules(deliveryData)
+      }
+
+      if (menuDocsRes.ok) {
+        const menuDocsData = await menuDocsRes.json()
+        setMenuDocuments(menuDocsData)
       }
     } catch (error) {
       console.error("Error loading data:", error)
@@ -800,6 +833,70 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  async function handleUploadMenuDocument() {
+    if (!selectedMenuFile) {
+      alert("Selecione um arquivo PDF, JPG, PNG ou WEBP.")
+      return
+    }
+
+    try {
+      setUploadingMenuFile(true)
+      const formData = new FormData()
+      formData.append("file", selectedMenuFile)
+      const response = await fetch("/api/ai/menu-documents", {
+        method: "POST",
+        body: formData,
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error || "Falha ao enviar arquivo")
+      }
+      setSelectedMenuFile(null)
+      setMenuFileInputKey((prev) => prev + 1)
+      await loadData()
+      alert("Arquivo enviado com sucesso.")
+    } catch (error) {
+      console.error("Error uploading AI menu file:", error)
+      alert((error as Error)?.message || "Falha ao enviar arquivo")
+    } finally {
+      setUploadingMenuFile(false)
+    }
+  }
+
+  async function handleSetActiveMenuDocument(id: string) {
+    try {
+      setProcessingMenuFileId(id)
+      const response = await fetch(`/api/ai/menu-documents/${id}/activate`, { method: "PATCH" })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error || "Falha ao ativar arquivo")
+      }
+      await loadData()
+    } catch (error) {
+      console.error("Error activating AI menu file:", error)
+      alert((error as Error)?.message || "Falha ao ativar arquivo")
+    } finally {
+      setProcessingMenuFileId(null)
+    }
+  }
+
+  async function handleDeleteMenuDocument(id: string) {
+    try {
+      setProcessingMenuFileId(id)
+      const response = await fetch(`/api/ai/menu-documents/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error || "Falha ao excluir arquivo")
+      }
+      await loadData()
+    } catch (error) {
+      console.error("Error deleting AI menu file:", error)
+      alert((error as Error)?.message || "Falha ao excluir arquivo")
+    } finally {
+      setProcessingMenuFileId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -1224,6 +1321,99 @@ export default function ConfiguracoesPage() {
                   >
                     &gt;
                   </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeSection === "aiMenu" && (
+          <div className="space-y-4">
+            <div className="border rounded-lg p-6 space-y-4">
+              <div>
+                <h2 className="text-xl font-semibold">Cardápio IA</h2>
+                <p className="text-sm text-muted-foreground">
+                  Envie o cardápio em PDF ou imagem para o agente utilizar quando necessário.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+                <div className="space-y-2">
+                  <Label>Arquivo (PDF, JPG, PNG, WEBP)</Label>
+                  <Input
+                    key={menuFileInputKey}
+                    type="file"
+                    accept=".pdf,image/jpeg,image/png,image/webp"
+                    onChange={(e) => setSelectedMenuFile(e.target.files?.[0] || null)}
+                  />
+                  <p className="text-xs text-muted-foreground">Tamanho máximo: 15 MB</p>
+                </div>
+                <Button onClick={handleUploadMenuDocument} disabled={!selectedMenuFile || uploadingMenuFile}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {uploadingMenuFile ? "Enviando..." : "Enviar arquivo"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="border rounded-lg">
+              <div className="p-4 border-b bg-muted/40">
+                <h3 className="font-semibold">Arquivos enviados</h3>
+              </div>
+
+              {menuDocuments.length === 0 ? (
+                <div className="p-6 text-sm text-muted-foreground">Nenhum arquivo enviado ainda.</div>
+              ) : (
+                <div className="divide-y">
+                  {menuDocuments.map((doc) => (
+                    <div key={doc.id} className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{doc.file_name}</p>
+                          {doc.is_active && (
+                            <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium text-primary border-primary/30 bg-primary/10">
+                              Ativo
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatFileSize(doc.file_size)} • {new Date(doc.created_at).toLocaleString("pt-BR")}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {doc.download_url && (
+                          <a
+                            href={doc.download_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sm underline text-muted-foreground hover:text-foreground"
+                          >
+                            Abrir
+                          </a>
+                        )}
+                        {!doc.is_active && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetActiveMenuDocument(doc.id)}
+                            disabled={processingMenuFileId === doc.id}
+                          >
+                            <Star className="h-4 w-4 mr-2" />
+                            Definir como principal
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteMenuDocument(doc.id)}
+                          disabled={processingMenuFileId === doc.id}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
