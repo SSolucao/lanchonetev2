@@ -37,6 +37,7 @@ type BusinessHourDay = {
 type MenuDocument = {
   id: string
   file_name: string
+  description: string | null
   mime_type: string
   file_size: number
   is_active: boolean
@@ -142,6 +143,7 @@ export default function ConfiguracoesPage() {
   const [neighborhoodSearch, setNeighborhoodSearch] = useState("")
   const [menuDocuments, setMenuDocuments] = useState<MenuDocument[]>([])
   const [selectedMenuFile, setSelectedMenuFile] = useState<File | null>(null)
+  const [menuFileDescription, setMenuFileDescription] = useState("")
   const [uploadingMenuFile, setUploadingMenuFile] = useState(false)
   const [processingMenuFileId, setProcessingMenuFileId] = useState<string | null>(null)
   const [menuFileInputKey, setMenuFileInputKey] = useState(0)
@@ -843,6 +845,9 @@ export default function ConfiguracoesPage() {
       setUploadingMenuFile(true)
       const formData = new FormData()
       formData.append("file", selectedMenuFile)
+      if (menuFileDescription.trim()) {
+        formData.append("description", menuFileDescription.trim())
+      }
       const response = await fetch("/api/ai/menu-documents", {
         method: "POST",
         body: formData,
@@ -852,6 +857,7 @@ export default function ConfiguracoesPage() {
         throw new Error(body?.error || "Falha ao enviar arquivo")
       }
       setSelectedMenuFile(null)
+      setMenuFileDescription("")
       setMenuFileInputKey((prev) => prev + 1)
       await loadData()
       alert("Arquivo enviado com sucesso.")
@@ -1338,7 +1344,7 @@ export default function ConfiguracoesPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label>Arquivo (PDF, JPG, PNG, WEBP)</Label>
                   <Input
                     key={menuFileInputKey}
@@ -1346,6 +1352,15 @@ export default function ConfiguracoesPage() {
                     accept=".pdf,image/jpeg,image/png,image/webp"
                     onChange={(e) => setSelectedMenuFile(e.target.files?.[0] || null)}
                   />
+                  <div className="space-y-2">
+                    <Label>Descrição (opcional)</Label>
+                    <Textarea
+                      value={menuFileDescription}
+                      onChange={(e) => setMenuFileDescription(e.target.value.slice(0, 160))}
+                      placeholder="Ex: Cardápio almoço (sem bebidas)"
+                      rows={2}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground">Tamanho máximo: 15 MB</p>
                 </div>
                 <Button onClick={handleUploadMenuDocument} disabled={!selectedMenuFile || uploadingMenuFile}>
@@ -1378,6 +1393,7 @@ export default function ConfiguracoesPage() {
                         <p className="text-xs text-muted-foreground mt-1">
                           {formatFileSize(doc.file_size)} • {new Date(doc.created_at).toLocaleString("pt-BR")}
                         </p>
+                        {doc.description && <p className="text-sm mt-1">{doc.description}</p>}
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">

@@ -133,6 +133,7 @@ export interface MenuDocument {
   id: string
   restaurant_id: string
   file_name: string
+  description: string | null
   storage_path: string
   mime_type: string
   file_size: number

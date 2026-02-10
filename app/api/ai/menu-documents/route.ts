@@ -9,6 +9,7 @@ const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024
 type MenuDocumentRow = {
   id: string
   file_name: string
+  description: string | null
   storage_path: string
   mime_type: string
   file_size: number
@@ -56,7 +57,7 @@ export async function GET() {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("ai_menu_documents")
-      .select("id,file_name,storage_path,mime_type,file_size,is_active,created_at")
+      .select("id,file_name,description,storage_path,mime_type,file_size,is_active,created_at")
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: false })
 
@@ -82,6 +83,9 @@ export async function POST(request: Request) {
 
     const formData = await request.formData()
     const file = formData.get("file")
+    const descriptionRaw = formData.get("description")
+    const description =
+      typeof descriptionRaw === "string" && descriptionRaw.trim() ? descriptionRaw.trim().slice(0, 160) : null
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 })
@@ -130,12 +134,13 @@ export async function POST(request: Request) {
       .insert({
         restaurant_id: restaurantId,
         file_name: file.name,
+        description,
         storage_path: filePath,
         mime_type: file.type,
         file_size: file.size,
         is_active: shouldBeActive,
       })
-      .select("id,file_name,storage_path,mime_type,file_size,is_active,created_at")
+      .select("id,file_name,description,storage_path,mime_type,file_size,is_active,created_at")
       .single()
 
     if (insertError || !inserted) {
