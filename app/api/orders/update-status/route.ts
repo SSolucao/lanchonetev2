@@ -125,12 +125,18 @@ export async function POST(request: NextRequest) {
           console.error("[v0] Error fetching order for WhatsApp notification:", orderError)
         } else if (orderData?.customer?.phone) {
           const customerName = orderData.customer.name || ""
+          const firstName = customerName.trim().split(/\s+/)[0] || ""
           const restaurantName = orderData.restaurant?.name || "nosso time"
 
           if (newStatus === "EM_PREPARO" && oldStatus !== "EM_PREPARO") {
-            const text = `Olá${customerName ? `, ${customerName}` : ""}! Seu pedido #${
-              orderData.order_number
-            } está em preparo. Avisaremos assim que sair para entrega. Obrigado! – ${restaurantName}`
+            const isRetirada = orderData.tipo_pedido === "RETIRADA" || orderData.delivery_mode === "RETIRA"
+            const text = isRetirada
+              ? `Olá${firstName ? `, ${firstName}` : ""}! Seu pedido ${
+                  orderData.order_number
+                } está em preparo. Avisaremos assim que estiver pronto para retirada. Obrigado! – ${restaurantName}`
+              : `Olá${customerName ? `, ${customerName}` : ""}! Seu pedido #${
+                  orderData.order_number
+                } está em preparo. Avisaremos assim que sair para entrega. Obrigado! – ${restaurantName}`
 
             sendWhatsAppText({ number: orderData.customer.phone, text }).catch((err) =>
               console.error("[v0] Error sending WhatsApp message:", err),

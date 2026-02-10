@@ -49,6 +49,8 @@ export async function notifyOrderEnteredEmPreparo({
         `
         id,
         order_number,
+        tipo_pedido,
+        delivery_mode,
         restaurant:restaurants(name),
         customer:customers(name, phone)
       `,
@@ -64,10 +66,16 @@ export async function notifyOrderEnteredEmPreparo({
     const phone = normalizeWhatsAppNumber(orderData?.customer?.phone)
     if (phone) {
       const customerName = orderData.customer.name || ""
+      const firstName = customerName.trim().split(/\s+/)[0] || ""
       const restaurantName = orderData.restaurant?.name || "nosso time"
-      const text = `Olá${customerName ? `, ${customerName}` : ""}! Seu pedido #${
-        orderData.order_number
-      } está em preparo. Avisaremos assim que sair para entrega. Obrigado! – ${restaurantName}`
+      const isRetirada = orderData.tipo_pedido === "RETIRADA" || orderData.delivery_mode === "RETIRA"
+      const text = isRetirada
+        ? `Olá${firstName ? `, ${firstName}` : ""}! Seu pedido ${
+            orderData.order_number
+          } está em preparo. Avisaremos assim que estiver pronto para retirada. Obrigado! – ${restaurantName}`
+        : `Olá${customerName ? `, ${customerName}` : ""}! Seu pedido #${
+            orderData.order_number
+          } está em preparo. Avisaremos assim que sair para entrega. Obrigado! – ${restaurantName}`
 
       sendWhatsAppText({ number: phone, text }).catch((err) =>
         console.error("[v0] Error sending WhatsApp message:", err),
