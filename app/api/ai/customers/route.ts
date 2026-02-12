@@ -111,6 +111,36 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(10)
 
+    const { data: lastOrder } = await supabaseRead
+      .from("orders")
+      .select(
+        `
+        id,
+        order_number,
+        status,
+        total,
+        created_at,
+        tipo_pedido,
+        order_items (
+          id,
+          quantity,
+          unit_price,
+          total_price,
+          notes,
+          products (
+            id,
+            name
+          )
+        )
+      `,
+      )
+      .eq("restaurant_id", restaurant.id)
+      .eq("customer_id", customer.id)
+      .neq("status", "CANCELADO")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
     const activeOrdersFormatted =
       activeOrders?.map((order: any) => ({
         order_number: order.order_number,
@@ -125,6 +155,23 @@ export async function GET(request: Request) {
           notes: item.notes,
         })),
       })) || []
+
+    const lastOrderFormatted = lastOrder
+      ? {
+          order_number: lastOrder.order_number,
+          status: lastOrder.status,
+          total: lastOrder.total,
+          date: lastOrder.created_at,
+          type: lastOrder.tipo_pedido,
+          items:
+            lastOrder.order_items?.map((item: any) => ({
+              product: item.products?.name || "Produto removido",
+              quantity: item.quantity,
+              price: item.unit_price,
+              notes: item.notes,
+            })) || [],
+        }
+      : null
 
     const response = {
       exists: true,
@@ -142,6 +189,7 @@ export async function GET(request: Request) {
         delivery_fee: customer.delivery_fee_default || 0,
         delivery_available: customer.delivery_available ?? true,
       },
+      last_order: lastOrderFormatted,
       active_orders: activeOrdersFormatted,
     }
 
@@ -154,7 +202,11 @@ export async function GET(request: Request) {
       response_body: response,
       restaurant_id: restaurant.id,
       customer_id: customer.id,
-      metadata: { active_orders_count: activeOrdersFormatted.length },
+      metadata: {
+        active_orders_count: activeOrdersFormatted.length,
+        has_last_order: !!lastOrderFormatted,
+        last_order_status: lastOrderFormatted?.status || null,
+      },
     })
 
     return NextResponse.json(response)
