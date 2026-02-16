@@ -1,6 +1,26 @@
 import { createClient } from "@/lib/supabase/server"
 import type { DeliveryRule, CreateDeliveryRuleInput } from "@/src/domain/types"
 
+export interface DeliveryRuleSimilarityResult {
+  id: string
+  neighborhood: string
+  fee: number
+  similarity: number
+}
+
+const NEIGHBORHOOD_STOP_WORDS = new Set([
+  "bairro",
+  "conjunto",
+  "jd",
+  "jardim",
+  "loteamento",
+  "parque",
+  "residencial",
+  "res",
+  "setor",
+  "vila",
+])
+
 /**
  * Service layer for Delivery Rule operations
  */
@@ -52,6 +72,125 @@ export async function deleteDeliveryRule(id: string): Promise<void> {
   const { error } = await supabase.from("delivery_rules").delete().eq("id", id)
 
   if (error) throw error
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function tokenizeMeaningful(text: string): string[] {
+  return text
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !NEIGHBORHOOD_STOP_WORDS.has(token))
+}
+
+function diceCoefficient(a: string, b: string): number {
+  if (!a || !b) return 0
+  if (a === b) return 1
+  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0
+
+  const gramsA = new Map<string, number>()
+  for (let i = 0; i < a.length - 1; i += 1) {
+    const gram = a.slice(i, i + 2)
+    gramsA.set(gram, (gramsA.get(gram) ?? 0) + 1)
+  }
+
+  let intersection = 0
+  for (let i = 0; i < b.length - 1; i += 1) {
+    const gram = b.slice(i, i + 2)
+    const count = gramsA.get(gram)
+    if (count && count > 0) {
+      intersection += 1
+      gramsA.set(gram, count - 1)
+    }
+  }
+
+  return (2 * intersection) / ((a.length - 1) + (b.length - 1))
+}
+
+function tokenOverlap(a: string, b: string): number {
+  const tokensA = new Set(a.split(" ").filter(Boolean))
+  const tokensB = new Set(b.split(" ").filter(Boolean))
+
+  if (tokensA.size === 0 || tokensB.size === 0) return 0
+
+  let shared = 0
+  for (const token of tokensA) {
+    if (tokensB.has(token)) shared += 1
+  }
+
+  return shared / Math.max(tokensA.size, tokensB.size)
+}
+
+function calculateSimilarity(query: string, candidate: string): number {
+  if (!query || !candidate) return 0
+  if (query === candidate) return 1
+
+  const queryTokens = tokenizeMeaningful(query)
+  const candidateTokens = tokenizeMeaningful(candidate)
+
+  const dice = diceCoefficient(query, candidate)
+  const overlap = tokenOverlap(query, candidate)
+
+  let meaningfulOverlap = 0
+  if (queryTokens.length > 0 && candidateTokens.length > 0) {
+    const candidateSet = new Set(candidateTokens)
+    const shared = queryTokens.filter((token) => candidateSet.has(token)).length
+    meaningfulOverlap = shared / queryTokens.length
+  }
+
+  if (queryTokens.length > 0 && meaningfulOverlap === 0 && dice < 0.6) {
+    return 0
+  }
+
+  const containsBoost = candidate.includes(query) || query.includes(candidate) ? 0.1 : 0
+
+  return Math.min(1, dice * 0.35 + overlap * 0.25 + meaningfulOverlap * 0.3 + containsBoost)
+}
+
+export async function searchDeliveryRulesByNeighborhood(
+  restaurantId: string,
+  query: string,
+  limit = 10,
+  minSimilarity = 0.3,
+): Promise<DeliveryRuleSimilarityResult[]> {
+  const normalizedQuery = normalizeText(query)
+  if (!normalizedQuery) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("delivery_rules")
+    .select("id, neighborhood, fee")
+    .eq("restaurant_id", restaurantId)
+    .not("neighborhood", "is", null)
+    .neq("neighborhood", "")
+
+  if (error) throw error
+
+  const results =
+    (data || [])
+      .map((rule) => {
+        const neighborhood = String(rule.neighborhood || "").trim()
+        const similarity = calculateSimilarity(normalizedQuery, normalizeText(neighborhood))
+
+        return {
+          id: String(rule.id),
+          neighborhood,
+          fee: Number(rule.fee),
+          similarity,
+        }
+      })
+      .filter((rule) => rule.neighborhood && rule.similarity >= minSimilarity)
+      .sort((a, b) => b.similarity - a.similarity || a.neighborhood.localeCompare(b.neighborhood))
+      .slice(0, Math.max(1, Math.min(50, limit))) || []
+
+  return results
 }
 
 /**

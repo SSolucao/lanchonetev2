@@ -59,9 +59,11 @@ export interface Customer {
   neighborhood: string | null
   city: string | null
   complement: string | null
+  address_line?: string | null
   notes: string | null
   delivery_fee_default?: number | null
   delivery_available?: boolean | null
+  delivery_rule_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -272,9 +274,11 @@ export interface CreateCustomerInput {
   neighborhood?: string
   city?: string
   complement?: string
+  address_line?: string | null
   notes?: string
   delivery_fee_default?: number | null
   delivery_available?: boolean | null
+  delivery_rule_id?: string | null
 }
 
 export interface CreateProductInput {
