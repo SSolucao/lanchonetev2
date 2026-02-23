@@ -79,10 +79,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ exists: false, customer: null })
     }
 
-    const fullAddress = customer.street
-      ? `${customer.street}, ${customer.number || "s/n"} - ${customer.neighborhood}, ${customer.city}`
-      : null
-
     const supabaseRead = admin || supabase
     const { data: activeOrders } = await supabaseRead
       .from("orders")
@@ -179,15 +175,9 @@ export async function GET(request: Request) {
         id: customer.id,
         name: customer.name,
         phone: customer.phone,
-        address: fullAddress,
-        cep: customer.cep,
-        street: customer.street,
-        number: customer.number,
+        address_line: customer.address_line || null,
         neighborhood: customer.neighborhood,
-        city: customer.city,
-        complement: customer.complement,
         delivery_fee: customer.delivery_fee_default || 0,
-        delivery_available: customer.delivery_available ?? true,
       },
       last_order: lastOrderFormatted,
       active_orders: activeOrdersFormatted,
