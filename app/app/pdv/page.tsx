@@ -392,7 +392,7 @@ export default function PdvPage() {
       const customer = await response.json()
 
       setCustomer(customer)
-      setShowNewCustomerForm(false)
+      setShowCustomerForm(false)
       setNewCustomerData({
         name: "",
         phone: "",
@@ -503,22 +503,18 @@ export default function PdvPage() {
       toast({
         variant: "destructive",
         title: "Entrega indisponível",
-        description: "Cadastre uma taxa por bairro ou informe o CEP para calcular por KM.",
+        description: "Cadastre uma taxa por bairro para este cliente.",
       })
       return
     }
     if (
       isDeliveryOrder &&
-      (!draft.customer.cep ||
-        !draft.customer.street ||
-        !draft.customer.number ||
-        !draft.customer.neighborhood ||
-        !draft.customer.city)
+      (!draft.customer?.address_line || !draft.customer?.neighborhood)
     ) {
       toast({
         variant: "destructive",
         title: "Endereço obrigatório",
-        description: "Para entrega, complete o cadastro com endereço.",
+        description: "Para entrega, informe rua e bairro no cadastro do cliente.",
       })
       return
     }
@@ -702,11 +698,7 @@ export default function PdvPage() {
     if (!draft.customer) return
 
     const missingAddress =
-      !draft.customer.cep ||
-      !draft.customer.street ||
-      !draft.customer.number ||
-      !draft.customer.neighborhood ||
-      !draft.customer.city
+      !draft.customer.address_line || !draft.customer.neighborhood
 
     if (!missingAddress) {
       addressPromptedCustomerId.current = null
@@ -1069,7 +1061,7 @@ export default function PdvPage() {
                             </p>
                             {draft.customer.neighborhood && (
                               <p className="text-sm text-muted-foreground">
-                                {draft.customer.neighborhood}, {draft.customer.city}
+                                {draft.customer.neighborhood}
                               </p>
                             )}
                           </div>
@@ -1110,7 +1102,7 @@ export default function PdvPage() {
                               <p className="text-sm text-muted-foreground">{customer.phone}</p>
                               {customer.neighborhood && (
                                 <p className="text-sm text-muted-foreground">
-                                  {customer.neighborhood}, {customer.city}
+                                  {customer.neighborhood}
                                 </p>
                               )}
                             </div>
@@ -1148,7 +1140,7 @@ export default function PdvPage() {
                     </div>
                     {deliveryBlocked && (
                       <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                        Entrega indisponível para este cliente. Cadastre uma taxa por bairro ou use CEP para KM.
+                        Entrega indisponível para este cliente. Cadastre uma taxa por bairro.
                       </div>
                     )}
                   </div>

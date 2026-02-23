@@ -7,9 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Customer } from "@/src/domain/types"
-import { formatPhone, formatCEP, unformatNumbers, fetchAddressFromCEP } from "@/lib/format-utils"
+import { formatPhone, unformatNumbers } from "@/lib/format-utils"
 
 interface CustomerFormDialogProps {
   open: boolean
@@ -29,134 +29,117 @@ export function CustomerFormDialog({
   requireAddress = false,
 }: CustomerFormDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [loadingCEP, setLoadingCEP] = useState(false)
+  const [loadingNeighborhoods, setLoadingNeighborhoods] = useState(false)
+  const [neighborhoodOptions, setNeighborhoodOptions] = useState<Array<{ id: string; name: string; fee: number }>>([])
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
-  const [cep, setCep] = useState("")
-  const [street, setStreet] = useState("")
-  const [number, setNumber] = useState("")
+  const [addressLine, setAddressLine] = useState("")
   const [neighborhood, setNeighborhood] = useState("")
-  const [city, setCity] = useState("")
-  const [complement, setComplement] = useState("")
-  const [notes, setNotes] = useState("")
-  const [deliveryFee, setDeliveryFee] = useState("")
-  const [deliveryFeeTouched, setDeliveryFeeTouched] = useState(false)
+  const [selectedNeighborhoodRuleId, setSelectedNeighborhoodRuleId] = useState("")
+  const [neighborhoodSearch, setNeighborhoodSearch] = useState("")
+  const [debouncedNeighborhoodSearch, setDebouncedNeighborhoodSearch] = useState("")
   const [nameConflictOpen, setNameConflictOpen] = useState(false)
   const [nameConflictMatches, setNameConflictMatches] = useState<Customer[]>([])
   const isMinimal = mode === "minimal"
-  const lastFeeKey = useRef<string | null>(null)
-  const feeRequest = useRef<AbortController | null>(null)
+  const lastNeighborhoodFetchAt = useRef<number>(0)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedNeighborhoodSearch(neighborhoodSearch.trim().toLowerCase())
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [neighborhoodSearch])
 
   useEffect(() => {
     if (open && customer) {
       setName(customer.name)
       setPhone(customer.phone ? formatPhone(customer.phone) : "")
-      setCep(customer.cep ? formatCEP(customer.cep) : "")
-      setStreet(customer.street || "")
-      setNumber(customer.number || "")
+      setAddressLine(customer.address_line || "")
       setNeighborhood(customer.neighborhood || "")
-      setCity(customer.city || "")
-      setComplement(customer.complement || "")
-      setNotes(customer.notes || "")
-      setDeliveryFee(
-        typeof customer.delivery_fee_default === "number" ? customer.delivery_fee_default.toFixed(2) : "",
-      )
-      setDeliveryFeeTouched(false)
-      const feeKey = [
-        customer.cep ? unformatNumbers(customer.cep) : "",
-        customer.street || "",
-        customer.number || "",
-        customer.neighborhood || "",
-        customer.city || "",
-      ].join("|")
-      lastFeeKey.current = customer.cep ? feeKey : null
+      setSelectedNeighborhoodRuleId(customer.delivery_rule_id || "")
     } else if (open) {
       resetForm()
     }
   }, [open, customer])
 
+  useEffect(() => {
+    if (!open || isMinimal) return
+
+    const now = Date.now()
+    if (now - lastNeighborhoodFetchAt.current < 10000 && neighborhoodOptions.length > 0) {
+      return
+    }
+
+    let cancelled = false
+    const loadNeighborhoods = async () => {
+      try {
+        setLoadingNeighborhoods(true)
+        const response = await fetch("/api/delivery-rules")
+        if (!response.ok) {
+          throw new Error("Failed to load neighborhoods")
+        }
+        const rules = (await response.json()) as Array<{ id: string; neighborhood: string | null; fee: number }>
+        const options = rules
+          .filter((rule) => Boolean(rule.neighborhood && String(rule.neighborhood).trim()))
+          .map((rule) => ({
+            id: String(rule.id),
+            name: String(rule.neighborhood).trim(),
+            fee: Number(rule.fee || 0),
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+
+        if (cancelled) return
+        setNeighborhoodOptions(options)
+        lastNeighborhoodFetchAt.current = Date.now()
+
+        if (customer?.delivery_rule_id) {
+          const selected = options.find((option) => option.id === customer.delivery_rule_id)
+          if (selected) {
+            setNeighborhood(selected.name)
+            setSelectedNeighborhoodRuleId(selected.id)
+          }
+        } else if (customer?.neighborhood) {
+          const matched = options.find(
+            (option) => option.name.toLowerCase() === String(customer.neighborhood).trim().toLowerCase(),
+          )
+          if (matched) {
+            setNeighborhood(matched.name)
+            setSelectedNeighborhoodRuleId(matched.id)
+          } else {
+            setSelectedNeighborhoodRuleId("")
+          }
+        }
+      } catch (error) {
+        console.error("Error loading neighborhoods:", error)
+      } finally {
+        if (!cancelled) setLoadingNeighborhoods(false)
+      }
+    }
+
+    loadNeighborhoods()
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, isMinimal, customer, neighborhoodOptions.length])
+
   function resetForm() {
     setName("")
     setPhone("")
-    setCep("")
-    setStreet("")
-    setNumber("")
+    setAddressLine("")
     setNeighborhood("")
-    setCity("")
-    setComplement("")
-    setNotes("")
-    setDeliveryFee("")
-    setDeliveryFeeTouched(false)
-    lastFeeKey.current = null
+    setSelectedNeighborhoodRuleId("")
+    setNeighborhoodSearch("")
+    setDebouncedNeighborhoodSearch("")
   }
 
-  async function handleCEPChange(value: string) {
-    const formatted = formatCEP(value)
-    setCep(formatted)
-
-    // If CEP is complete (8 digits), fetch address
-    const cleanCEP = unformatNumbers(formatted)
-    if (cleanCEP.length === 8) {
-      setLoadingCEP(true)
-      const addressData = await fetchAddressFromCEP(cleanCEP)
-      setLoadingCEP(false)
-
-      if (addressData) {
-        setStreet(addressData.logradouro)
-        setNeighborhood(addressData.bairro)
-        setCity(addressData.localidade)
-        // Keep existing complement if user already filled it
-        if (!complement) {
-          setComplement(addressData.complemento)
-        }
-      }
-    }
-  }
-
-  useEffect(() => {
-    if (isMinimal || deliveryFeeTouched) return
-    const cleanCEP = unformatNumbers(cep)
-    if (cleanCEP.length !== 8 || !street || !number || !neighborhood || !city) return
-
-    const feeKey = [cleanCEP, street, number, neighborhood, city].join("|")
-    if (lastFeeKey.current === feeKey) return
-
-    const timer = setTimeout(async () => {
-      if (feeRequest.current) {
-        feeRequest.current.abort()
-      }
-      const controller = new AbortController()
-      feeRequest.current = controller
-
-      try {
-        const response = await fetch("/api/customers/preview-delivery-fee", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            cep: cleanCEP,
-            street,
-            number,
-            neighborhood,
-            city,
-          }),
-          signal: controller.signal,
-        })
-
-        if (!response.ok) return
-        const data = await response.json()
-        if (data?.success) {
-          lastFeeKey.current = feeKey
-          setDeliveryFee(Number(data.fee || 0).toFixed(2))
-        }
-      } catch (error) {
-        if ((error as Error).name !== "AbortError") {
-          console.error("Error previewing delivery fee:", error)
-        }
-      }
-    }, 400)
-
-    return () => clearTimeout(timer)
-  }, [cep, street, number, neighborhood, city, isMinimal, deliveryFeeTouched])
+  const filteredNeighborhoodOptions = neighborhoodOptions.filter((option) => {
+    if (!debouncedNeighborhoodSearch) return true
+    const feeDot = option.fee.toFixed(2)
+    const feeComma = feeDot.replace(".", ",")
+    const searchable = `${option.name.toLowerCase()} ${feeDot} ${feeComma} ${Math.round(option.fee)}`
+    return searchable.includes(debouncedNeighborhoodSearch)
+  })
 
   const submitForm = async (allowDuplicateName = false) => {
     if (!name) {
@@ -169,11 +152,16 @@ export function CustomerFormDialog({
       return
     }
 
+    if (!isMinimal && (!addressLine || !selectedNeighborhoodRuleId || !neighborhood)) {
+      alert("Rua e bairro são obrigatórios")
+      return
+    }
+
     if (
       requireAddress &&
-      (!cep || !street || !number || !neighborhood || !city)
+      (!addressLine || !neighborhood)
     ) {
-      alert("Endereço completo é obrigatório para entrega")
+      alert("Rua e bairro são obrigatórios para entrega")
       return
     }
 
@@ -190,18 +178,10 @@ export function CustomerFormDialog({
       const body: Record<string, any> = {
         name,
         phone: cleanPhone,
-        cep: cep ? unformatNumbers(cep) : null,
-        street: street || null,
-        number: number || null,
+        address_line: addressLine || null,
         neighborhood: neighborhood || null,
-        city: city || null,
-        complement: complement || null,
-        notes: notes || null,
+        neighborhood_rule_id: selectedNeighborhoodRuleId || null,
         allow_duplicate_name: allowDuplicateName,
-      }
-
-      if (deliveryFeeTouched && deliveryFee !== "") {
-        body.delivery_fee_default = Number.parseFloat(deliveryFee)
       }
 
       const url = customer ? `/api/customers/${customer.id}` : "/api/customers"
@@ -277,66 +257,62 @@ export function CustomerFormDialog({
 
           {!isMinimal && (
             <>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>CEP</Label>
-                  <Input
-                    value={cep}
-                    onChange={(e) => handleCEPChange(e.target.value)}
-                    placeholder="12345-678"
-                    inputMode="numeric"
-                    disabled={loadingCEP}
-                  />
-                  {loadingCEP && <p className="text-xs text-muted-foreground">Buscando endereço...</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label>Cidade</Label>
-                  <Input value={city} onChange={(e) => setCity(e.target.value)} />
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <Label>Rua</Label>
-                <Input value={street} onChange={(e) => setStreet(e.target.value)} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Número</Label>
-                  <Input value={number} onChange={(e) => setNumber(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Bairro</Label>
-                  <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Complemento</Label>
-                <Input value={complement} onChange={(e) => setComplement(e.target.value)} />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Observações</Label>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Taxa de entrega padrão (R$)</Label>
+                <Label>Rua *</Label>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={deliveryFee}
-                  onChange={(e) => {
-                    setDeliveryFee(e.target.value)
-                    setDeliveryFeeTouched(true)
-                  }}
-                  placeholder="Automático"
+                  value={addressLine}
+                  onChange={(e) => setAddressLine(e.target.value)}
+                  placeholder="Rua + número + complemento"
+                  required={requireAddress}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Se deixar em branco, o sistema calcula pela regra de bairro/distância quando o endereço mudar.
-                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Bairro *</Label>
+                <Select
+                  value={selectedNeighborhoodRuleId}
+                  onValueChange={(ruleId) => {
+                    setSelectedNeighborhoodRuleId(ruleId)
+                    const selected = neighborhoodOptions.find((option) => option.id === ruleId)
+                    setNeighborhood(selected?.name || "")
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={loadingNeighborhoods ? "Carregando bairros..." : "Selecione um bairro"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <div className="sticky top-0 z-10 border-b bg-popover p-2">
+                      <Input
+                        value={neighborhoodSearch}
+                        onChange={(e) => setNeighborhoodSearch(e.target.value)}
+                        placeholder="Buscar bairro ou taxa..."
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    {neighborhoodOptions.length === 0 ? (
+                      <SelectItem value="__empty" disabled>
+                        Nenhum bairro cadastrado
+                      </SelectItem>
+                    ) : filteredNeighborhoodOptions.length === 0 ? (
+                      <SelectItem value="__no_match" disabled>
+                        Nenhum bairro encontrado
+                      </SelectItem>
+                    ) : (
+                      filteredNeighborhoodOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name} - R$ {option.fee.toFixed(2)}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {!selectedNeighborhoodRuleId && neighborhood && (
+                  <p className="text-xs text-muted-foreground">
+                    Bairro atual não está na lista de regras. Selecione um bairro cadastrado.
+                  </p>
+                )}
               </div>
             </>
           )}

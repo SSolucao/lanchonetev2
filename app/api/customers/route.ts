@@ -4,6 +4,7 @@ import { getCurrentRestaurant } from "@/src/services/restaurantsService"
 import { calculateDeliveryFee } from "@/src/services/deliveryFeeService"
 import { findDeliveryFeeForNeighborhood } from "@/src/services/deliveryRulesService"
 import { normalizePhoneToInternational } from "@/lib/format-utils"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
@@ -55,24 +56,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const hasNeighborhood = typeof body.neighborhood === "string" && body.neighborhood.trim().length > 0
-    const hasCep = typeof body.cep === "string" && body.cep.trim().length > 0
-    if (hasNeighborhood && !hasCep) {
-      const neighborhoodFee = await findDeliveryFeeForNeighborhood(restaurant.id, body.neighborhood.trim())
-      if (neighborhoodFee === null) {
+    let deliveryFee = body.delivery_fee_default || 0
+    let deliveryAvailable = true
+    let deliveryRuleId: string | null = null
+
+    const neighborhoodRuleId = typeof body.neighborhood_rule_id === "string" ? body.neighborhood_rule_id.trim() : ""
+    if (neighborhoodRuleId) {
+      const supabase = await createClient()
+      const { data: selectedRule, error: selectedRuleError } = await supabase
+        .from("delivery_rules")
+        .select("id, neighborhood, fee")
+        .eq("id", neighborhoodRuleId)
+        .eq("restaurant_id", restaurant.id)
+        .maybeSingle()
+
+      if (selectedRuleError) throw selectedRuleError
+      if (!selectedRule || !selectedRule.neighborhood) {
         return NextResponse.json(
-          {
-            error: "NEIGHBORHOOD_NOT_FOUND",
-            message: "Bairro nao cadastrado. Informe o CEP para calcular a taxa por KM.",
-            require_cep: true,
-          },
+          { error: "INVALID_NEIGHBORHOOD_ID", message: "Bairro selecionado nao encontrado" },
           { status: 422 },
         )
       }
+
+      body.neighborhood = String(selectedRule.neighborhood).trim()
+      deliveryFee = Number(selectedRule.fee || 0)
+      deliveryAvailable = true
+      deliveryRuleId = selectedRule.id
     }
 
-    let deliveryFee = body.delivery_fee_default || 0
-    let deliveryAvailable = true
+    const hasNeighborhood = typeof body.neighborhood === "string" && body.neighborhood.trim().length > 0
+    const hasCep = typeof body.cep === "string" && body.cep.trim().length > 0
+    if (!neighborhoodRuleId && hasNeighborhood && !body.delivery_fee_default) {
+      const neighborhoodFee = await findDeliveryFeeForNeighborhood(restaurant.id, body.neighborhood.trim())
+      if (neighborhoodFee !== null) {
+        deliveryFee = neighborhoodFee
+        deliveryAvailable = true
+      } else if (!hasCep) {
+        deliveryFee = 0
+        deliveryAvailable = false
+      }
+    }
 
     if (body.cep && !body.delivery_fee_default && restaurant.address) {
       try {
@@ -100,6 +123,7 @@ export async function POST(request: NextRequest) {
       name: body.name,
       phone: normalizedPhone,
       cep: body.cep,
+      address_line: body.address_line,
       street: body.street,
       number: body.number,
       neighborhood: body.neighborhood,
@@ -109,6 +133,7 @@ export async function POST(request: NextRequest) {
       restaurant_id: restaurant.id,
       delivery_fee_default: deliveryFee,
       delivery_available: deliveryAvailable,
+      delivery_rule_id: deliveryRuleId,
     })
 
     return NextResponse.json(customer)

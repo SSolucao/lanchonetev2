@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCustomerById, updateCustomer, deleteCustomer, getCustomerByPhone } from "@/src/services/customersService"
 import { calculateDeliveryFee, buildFullAddress } from "@/src/services/deliveryFeeService"
 import { getFirstRestaurant } from "@/src/services/restaurantsService"
+import { findDeliveryFeeForNeighborhood } from "@/src/services/deliveryRulesService"
 import { normalizePhoneToInternational } from "@/lib/format-utils"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -22,6 +24,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
+    delete body.allow_duplicate_name
 
     console.log("[v0] PUT /api/customers/:id - Starting update for:", id)
 
@@ -45,6 +48,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const addressChanged =
+      body.address_line !== existingCustomer.address_line ||
       body.cep !== existingCustomer.cep ||
       body.street !== existingCustomer.street ||
       body.number !== existingCustomer.number ||
@@ -53,8 +57,47 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const hasManualFee = body.delivery_fee_default !== undefined && body.delivery_fee_default !== null
     let deliveryAvailable = existingCustomer.delivery_available ?? true
+    const neighborhoodRuleId = typeof body.neighborhood_rule_id === "string" ? body.neighborhood_rule_id.trim() : ""
+    delete body.neighborhood_rule_id
 
-    if (!hasManualFee && addressChanged && body.cep && body.street && body.number) {
+    if (!hasManualFee && neighborhoodRuleId) {
+      const supabase = await createClient()
+      const { data: selectedRule, error: selectedRuleError } = await supabase
+        .from("delivery_rules")
+        .select("id, neighborhood, fee")
+        .eq("id", neighborhoodRuleId)
+        .eq("restaurant_id", existingCustomer.restaurant_id)
+        .maybeSingle()
+
+      if (selectedRuleError) throw selectedRuleError
+      if (!selectedRule || !selectedRule.neighborhood) {
+        return NextResponse.json(
+          { error: "INVALID_NEIGHBORHOOD_ID", message: "Bairro selecionado nao encontrado" },
+          { status: 422 },
+        )
+      }
+
+      body.neighborhood = String(selectedRule.neighborhood).trim()
+      body.delivery_fee_default = Number(selectedRule.fee || 0)
+      body.delivery_available = true
+      body.delivery_rule_id = selectedRule.id
+      deliveryAvailable = true
+    } else if (!hasManualFee && typeof body.neighborhood === "string" && body.neighborhood.trim()) {
+      const neighborhoodFee = await findDeliveryFeeForNeighborhood(existingCustomer.restaurant_id, body.neighborhood.trim())
+      if (neighborhoodFee !== null) {
+        body.delivery_fee_default = neighborhoodFee
+        body.delivery_available = true
+        body.delivery_rule_id = null
+        deliveryAvailable = true
+      } else if (addressChanged) {
+        body.delivery_fee_default = 0
+        body.delivery_available = false
+        body.delivery_rule_id = null
+        deliveryAvailable = false
+      }
+    }
+
+    if (!hasManualFee && addressChanged && body.delivery_fee_default === undefined && body.cep && body.street && body.number) {
       try {
         const restaurant = await getFirstRestaurant()
         if (restaurant?.cep_origem && restaurant?.address) {
@@ -92,6 +135,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (hasManualFee) {
       body.delivery_available = true
+      body.delivery_rule_id = null
     } else if (addressChanged) {
       body.delivery_available = deliveryAvailable
     }
