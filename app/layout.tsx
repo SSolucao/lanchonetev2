@@ -5,16 +5,14 @@ import { Analytics } from "@vercel/analytics/next"
 import Script from "next/script"
 import "./globals.css"
 import { AuthProvider } from "@/src/context/AuthContext"
+import { ThemeProvider } from "@/src/context/ThemeContext"
 import { Toaster } from "@/components/ui/toaster"
-
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
-
 export const metadata: Metadata = {
   title: "Sistema de gestão e PDV",
   description: "Sistema de gestão e PDV",
 }
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -24,7 +22,9 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className={`font-sans antialiased`}>
         <Script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js" strategy="beforeInteractive" />
-        <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
         <Toaster />
         <Analytics />
       </body>

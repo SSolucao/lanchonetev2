@@ -1,45 +1,21 @@
 "use client"
 
 import type React from "react"
-
 import { useAuth } from "@/src/context/AuthContext"
+import { useTheme } from "@/src/context/ThemeContext"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, ShoppingCart, Package, Users, Settings, BarChart3, LogOut, Receipt } from "lucide-react"
+import { LayoutDashboard, ShoppingCart, Package, Users, Settings, BarChart3, LogOut, Receipt, Sun, Moon } from "lucide-react"
 
 const navigationItems = [
-  {
-    name: "PDV",
-    href: "/app/pdv",
-    icon: ShoppingCart,
-  },
-  {
-    name: "Comandas",
-    href: "/app/comandas",
-    icon: Receipt,
-  },
-  {
-    name: "Pedidos",
-    href: "/app/pedidos",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Produtos",
-    href: "/app/produtos",
-    icon: Package,
-  },
-  {
-    name: "Clientes",
-    href: "/app/clientes",
-    icon: Users,
-  },
-  {
-    name: "Relatórios",
-    href: "/app/relatorios",
-    icon: BarChart3,
-  },
+  { name: "PDV", href: "/app/pdv", icon: ShoppingCart },
+  { name: "Comandas", href: "/app/comandas", icon: Receipt },
+  { name: "Pedidos", href: "/app/pedidos", icon: LayoutDashboard },
+  { name: "Produtos", href: "/app/produtos", icon: Package },
+  { name: "Clientes", href: "/app/clientes", icon: Users },
+  { name: "Relatórios", href: "/app/relatorios", icon: BarChart3 },
   {
     name: "Configurações",
     href: "/app/configuracoes/estabelecimento",
@@ -57,6 +33,7 @@ const navigationItems = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { currentUser, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const pathname = usePathname()
 
   return (
@@ -113,7 +90,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-4 border-t">
+        <div className="p-4 border-t space-y-2">
+          <Button variant="ghost" className="w-full justify-start" onClick={toggleTheme}>
+            {theme === "light" ? (
+              <>
+                <Moon className="w-5 h-5 mr-3" />
+                Modo Escuro
+              </>
+            ) : (
+              <>
+                <Sun className="w-5 h-5 mr-3" />
+                Modo Claro
+              </>
+            )}
+          </Button>
           <Button variant="ghost" className="w-full justify-start" onClick={logout}>
             <LogOut className="w-5 h-5 mr-3" />
             Sair
